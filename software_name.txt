@@ -1,6 +1,0 @@
-NanoFISH-Analytix
-FISH-Locator
-OligoMap
-FISH-Metric
-FISH-Dist
-NanoFISH-Map
