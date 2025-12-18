@@ -1,0 +1,44 @@
+I have a Python function or class method. I want you to generate a Google-style docstring for it. Follow these rules strictly:
+Description: Start with a clear one-line description of what the function does.
+Args: Include all parameters with their type, description, and default value if any.
+Returns: Include return type and description. If the function returns nothing, use None.
+Example:
+    Always use a fenced code block with ```python.
+    If the function returns a value, show a working interactive example with >>> and the expected output.
+    If the function returns nothing (None), show usage of the function in a code block without >>>, just demonstrating how to call it.
+    Leave two blank lines before the closing triple backticks.
+    Indent the code block properly under Example: so it renders correctly in MkDocs.
+Keep the rest of the function code unchanged.
+Output only the function code with the new docstring, no explanations or extra text.
+
+Here is the function:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+I have a Python function (or class method). I want you to generate a Google-style docstring for it. Please follow these strict rules:
+Description: Start with a clear one-line description of what the function does.
+Args: Include all parameters with their type, description, and default if any.
+Returns: Include return type and description.
+Example section:
+Must use a fenced code block with ```python.
+Must show a working >>> Python example with expected output.
+Must have two blank lines before the closing ```.
+Indent the code block properly under Example: so it renders correctly in MkDocs.
+Keep all other function code unchanged.
+Output only the function code with the new docstring, no explanations.
+
+Here is the function:
+
