@@ -1,6 +1,9 @@
 
 mkdocs
 mkdocs-material
+mkdocs-material-extensions
 mkdocs-autorefs
 mkdocs-gen-files
-mkdocs-literate-nav
+mkdocs-get-deps
+mkdocstrings
+mkdocstrings-python
