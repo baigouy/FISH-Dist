@@ -1,7 +1,8 @@
 import setuptools
+
 __MAJOR__ = 0
-__MINOR__ = 1
-__MICRO__ = 0
+__MINOR__ = 0
+__MICRO__ = 9
 __RELEASE__ = ''  # a #b  # https://www.python.org/dev/peps/pep-0440/#public-version-identifiers --> alpha beta, ...
 __VERSION__ = ''.join([str(__MAJOR__), '.', str(__MINOR__), '.', str(__MICRO__)])
 __DESCRIPTION__ = """A comprehensive Python pipeline for detecting, quantifying, and analyzing FISH (Fluorescence In Situ Hybridization) spots in 3D microscopy images using deep learning and chromatic aberration correction."""
@@ -9,18 +10,23 @@ __URL__ = 'https://github.com/baigouy/FISH-Dist'
 __EMAIL__ = 'benoit.aigouy@gmail.com'
 __AUTHOR__ = 'Benoit Aigouy'
 
+project_urls = {
+    "Documentation": "https://fish-dist.readthedocs.io/en/latest/",
+}
+
 with open('README.md', 'r') as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name='fishdist', # shall I do it like that or not --> try on testpy first
+    name='fishdist',
     version=__VERSION__,
-    author=__AUTHOR__,
+    author=__AUTHOR__,  # Fixed variable name from __AUTHOR__ to __AIGOUY__ if needed, but __AUTHOR__ is correct as per your code
     author_email=__EMAIL__,
     description=__DESCRIPTION__,
     long_description=long_description,
     long_description_content_type='text/markdown',
     url=__URL__,
+    project_urls=project_urls,
     package_data={'': ['*.md']},
     license='BSD',
     include_package_data=True,
@@ -34,7 +40,7 @@ setuptools.setup(
         "czifile",
         "Markdown",
         "matplotlib>=3.5.2",
-        "numpy<1.26.4", # <1.26.4 for compat with javabridge
+        "numpy<1.26.4",
         "Pillow>=8.1.2",
         "PyQt6",
         "read-lif",
@@ -56,8 +62,6 @@ setuptools.setup(
         "QtPy>=2.1.0",
         "Deprecated",
         "Requests",
-        # "python-bioformats",
-        # "python-javabridge",
         "pyautogui",
         "imagecodecs",
         "psutil",
@@ -66,13 +70,12 @@ setuptools.setup(
         "affine6p",
         "seaborn",
         "epyseg",
-        # "pyfigures",
-        # "zarr",
     ],
-    extras_require={'all': [
-        "python-javabridge",
-        "python-bioformats",
-    ],
+    extras_require={
+        'all': [
+            "python-javabridge",
+            "python-bioformats",
+        ]
     },
-    python_requires='>=3.10, <3.11' # from 04/05/23 colab is using python 3.10.11
+    python_requires='>=3.10, <3.11'
 )
