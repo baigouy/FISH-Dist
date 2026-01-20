@@ -1,0 +1,28 @@
+site_name: FISH-Dist
+docs_dir: docs
+repo_url: https://github.com/baigouy/fishdist
+
+theme:
+  name: "readthedocs"
+
+plugins:
+  - search
+  - autorefs
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [..]
+          options:
+            show_root_heading: true
+            show_source: false
+  
+nav:
+  - FISH-Dist: index.md
+  - Advanced settings (configuration file): CONFIGURATION.md
+#  - pyTA: TA/README.md
+#  - tutorials.md
+#  - How-To Guides: how-to-guides.md
+  - API.md
+#  - explanation.md
+  
+
