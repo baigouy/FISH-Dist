@@ -209,3 +209,6 @@ This project is licensed under the BSD 3-Clause License - see the [LICENSE.txt](
 | **BAtoolset**           | Compilation of functions I find useful                                      | https://github.com/baigouy/BAtoolset              | BSD-2-Clause license |
 | **EPySeg**           | A deep learning and image processing package for segmentation and analysis                                 | https://github.com/baigouy/EPySeg              | BSD |
 | **affine_matrix_from_points**           | C. Gohlke code to calculate the affine transform between two sets of points | https://github.com/cgohlke/transformations/blob/deb1a195dab70f0f36365a104f9b70505e37b473/transformations/transformations.py#L920              | BSD 3-Clause |
+
+
+[![Documentation Status](https://readthedocs.org/projects/fish-dist/badge/?version=latest)](https://fish-dist.readthedocs.io/en/latest/)
