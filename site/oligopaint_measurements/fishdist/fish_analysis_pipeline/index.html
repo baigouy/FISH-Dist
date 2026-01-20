@@ -242,7 +242,7 @@
               –
               <div class="doc-md-description">
                 <p>Path where affine matrix and voxel size are saved.
-Files should be named as 'ch{ch1}_ch{ch2}_affine_chromatic_aberration_correction.npy' and
+Files should be named as 'ch{ch1}_ch{ch2}_acc.npy' and
 'ch{ch1}_ch{ch2}_voxel_size.npy'.</p>
               </div>
             </li>
@@ -2028,7 +2028,7 @@ databases are inferred.</p>
 
 
 <h3 id="oligopaint_measurements.fishdist.fish_analysis_pipeline.plot_analysis" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">plot_analysis</span><span class="p">(</span><span class="n">paths</span><span class="p">,</span> <span class="n">distance_cut_off</span><span class="o">=</span><span class="mf">2.5</span><span class="p">,</span> <span class="n">group_files_by_name_similarity</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">output_file_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_names</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;points_n_distances3D_only_in_nuclei_chromatic_aberrations_corrected&#39;</span><span class="p">,</span> <span class="s1">&#39;points_n_distances3D_only_in_nuclei_chromatic_aberrations_corrected_null_vector_method&#39;</span><span class="p">])</span></code>
+            <code class="highlight language-python"><span class="n">plot_analysis</span><span class="p">(</span><span class="n">paths</span><span class="p">,</span> <span class="n">distance_cut_off</span><span class="o">=</span><span class="mf">2.5</span><span class="p">,</span> <span class="n">group_files_by_name_similarity</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">output_file_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_names</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;points_n_distances3D_only_in_nuclei_acc&#39;</span><span class="p">,</span> <span class="s1">&#39;points_n_distances3D_only_in_nuclei_lcc&#39;</span><span class="p">])</span></code>
 
 </h3>
 
@@ -2092,7 +2092,7 @@ generates violin plots with median annotations.</p>
             <li>
               <b><code>table_names</code></b>
                   (<code>list of str</code>, default:
-                      <code>[&#39;points_n_distances3D_only_in_nuclei_chromatic_aberrations_corrected&#39;, &#39;points_n_distances3D_only_in_nuclei_chromatic_aberrations_corrected_null_vector_method&#39;]</code>
+                      <code>[&#39;points_n_distances3D_only_in_nuclei_acc&#39;, &#39;points_n_distances3D_only_in_nuclei_lcc&#39;]</code>
 )
               –
               <div class="doc-md-description">
