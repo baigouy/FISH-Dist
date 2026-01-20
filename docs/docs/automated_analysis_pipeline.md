@@ -1,1 +1,0 @@
-::: fishdist.automated_analysis_pipeline

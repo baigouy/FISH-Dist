@@ -1,1 +1,0 @@
-::: fishdist.spot_validation
