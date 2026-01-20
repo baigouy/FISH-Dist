@@ -1,1 +1,1 @@
-::: oligopaint_measurements.fishdist.fish_analysis_pipeline
+::: fishdist.fish_analysis_pipeline

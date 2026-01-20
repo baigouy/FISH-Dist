@@ -1,1 +1,1 @@
-::: oligopaint_measurements.fishdist.stack_prediction
+::: fishdist.stack_prediction

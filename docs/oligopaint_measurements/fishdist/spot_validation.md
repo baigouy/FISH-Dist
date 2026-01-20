@@ -1,1 +1,1 @@
-::: oligopaint_measurements.fishdist.spot_validation
+::: fishdist.spot_validation

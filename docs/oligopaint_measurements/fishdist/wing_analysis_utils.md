@@ -1,1 +1,1 @@
-::: oligopaint_measurements.fishdist.wing_analysis_utils
+::: fishdist.wing_analysis_utils
