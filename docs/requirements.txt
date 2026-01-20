@@ -1,0 +1,6 @@
+
+mkdocs
+mkdocs-material
+mkdocs-autorefs
+mkdocs-gen-files
+mkdocs-literate-nav
