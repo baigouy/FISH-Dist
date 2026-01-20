@@ -1,7 +1,3 @@
-# debug options: --root-path "/media/teamPrudhomme/EqpPrudhomme2/FISH_Dist_analysis"
-# debug options: --config /media/teamPrudhomme/EqpPrudhomme2/FISH_Dist_analysis/config.json
-
-
 import sys
 
 # sys.path.append('/home/aigouy/miniconda3/pkgs/cuda-nvcc-tools-12.4.131-h99ab3db_0/bin')

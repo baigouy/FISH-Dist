@@ -99,7 +99,7 @@ FISH-Dist operates in **two sequential phases**. Understanding this order is ess
 
 ```bash
 conda activate FISH_Dist
-python fish_dist.py --root-path /path/to/FISH_Dist_analysis
+python -m fishdist --root-path /path/to/FISH_Dist_analysis
 ```
 
 - Store generated `.npy` matrices in `controls/`.
@@ -124,7 +124,7 @@ python fish_dist.py --root-path /path/to/FISH_Dist_analysis
 
 ```bash
 conda activate FISH_Dist
-python fish_dist.py --root-path FISH_Dist_analysis
+python -m fishdist --root-path FISH_Dist_analysis
 ```
 
 - Outputs:

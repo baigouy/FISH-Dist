@@ -1,11 +1,16 @@
+# --root-path "/media/teamPrudhomme/EqpPrudhomme2/FISH_Dist_analysis"
+# --config /media/teamPrudhomme/EqpPrudhomme2/FISH_Dist_analysis/config.json
+
 from batoolset.files.tools import smart_name_parser
 from batoolset.utils.loadlist import loadlist
 from fishdist.automated_analysis_pipeline import print_folder_logic_with_values, parse_arguments, \
     merge_args_with_config, validate_paths, print_current_analysis, move_to_DONE_when_DONE
 import os
 import sys
-
 from fishdist.fish_analysis_pipeline import run_analysis
+
+
+# from epyseg.epygui import EPySeg
 
 
 # def run_FISH_dist():

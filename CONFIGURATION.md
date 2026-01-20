@@ -141,7 +141,7 @@ To run FISH-Dist with a configuration file, simply use:
 ```bash
 # Run FISH-Dist using an explicit configuration file
 conda activate FISH_Dist
-python fish_dist.py --config /path/to/config.json
+python -m fishdist --config /path/to/config.json
 ```
 
 Alternatively, if `config.json` is located inside the analysis root folder:
@@ -149,7 +149,7 @@ Alternatively, if `config.json` is located inside the analysis root folder:
 ```bash
 # Run FISH-Dist as ususal and it will read the config file automatically
 conda activate FISH_Dist
-python fish_dist.py --root-path /path/to/FISH_Dist_analysis 
+python -m fishdist --root-path /path/to/FISH_Dist_analysis 
 ```
 
 The script will automatically override any command-line arguments with the values in the JSON file.

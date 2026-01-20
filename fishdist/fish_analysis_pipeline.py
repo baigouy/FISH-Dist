@@ -4,14 +4,14 @@ import os.path
 import traceback
 from scipy.ndimage import generate_binary_structure, grey_dilation, gaussian_laplace
 from batoolset.SQLites.tools import get_column_from_sqlite_table, set_voxel_size, get_tables, drop_table_if_exists
-from string_tools import levenshtein_distance, _extract_base_name, longest_common_substring
+from fishdist.string_tools import levenshtein_distance, _extract_base_name, longest_common_substring
 from batoolset.utils.loadlist import loadlist
-from spot_data_utils import compute_pairwise_distance
+from fishdist.spot_data_utils import compute_pairwise_distance
 from epyseg.deeplearning.deepl import EZDeepLearning
 from batoolset.img import Img, save_as_tiff, invert
 from batoolset.nps.tools import filter_nan_rows
 from batoolset.ta.database.sql import query_db_and_get_results
-from sql_tools import combine_single_file_queries
+from fishdist.sql_tools import combine_single_file_queries
 from batoolset.files.tools import smart_name_parser, smart_name_appender
 from fishdist.wing_analysis_utils import add_to_db_sql, get_q1_q3,compute_weighted_centroid
 from fishdist.stack_prediction import predict_3D_stack_from_2D_model
