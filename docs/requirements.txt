@@ -1,8 +1,0 @@
-mkdocs
-mkdocs-material
-mkdocs-material-extensions
-mkdocs-autorefs
-mkdocs-gen-files
-mkdocs-get-deps
-mkdocstrings
-mkdocstrings-python
