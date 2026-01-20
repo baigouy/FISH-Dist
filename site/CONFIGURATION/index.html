@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Advanced settings (configuration file) - FISH-Dist</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+        <link href="../assets/_mkdocstrings.css" rel="stylesheet" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Advanced settings (configuration file)";
+        var mkdocs_page_input_path = "CONFIGURATION.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> FISH-Dist
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">FISH-Dist</a>
+                </li>
+              </ul>
+              <ul class="current">
+                <li class="toctree-l1 current"><a class="reference internal current" href="#">Advanced settings (configuration file)</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#json-structure">JSON Structure</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#example-configjson-files">Example config.json Files</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#example-1-minimal-configuration-default-channel-convention">Example 1 — Minimal Configuration (Default Channel Convention)</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#example-2-custom-channel-assignment">Example 2 — Custom Channel Assignment</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#example-3-multiple-fish-channels-one-to-many-pairing">Example 3 — Multiple FISH Channels (One-to-Many Pairing)</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#example-4-distance-measurement-only-reuse-existing-controls">Example 4 — Distance Measurement Only (Reuse Existing Controls)</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#example-5-disable-gaussian-fitting-faster-runtime">Example 5 — Disable Gaussian Fitting (Faster Runtime)</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#example-6-custom-pairing-and-segmentation-parameters">Example 6 — Custom Pairing and Segmentation Parameters</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#example-7-full-explicit-configuration">Example 7 — Full Explicit Configuration</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#example-using-custom-segmentation-models">Example — Using Custom Segmentation Models</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#using-the-configuration-file">Using the Configuration File</a>
+    </li>
+    </ul>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../API/">API</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">FISH-Dist</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Advanced settings (configuration file)</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/baigouy/fishdist/edit/master/docs/CONFIGURATION.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="fish-dist-configuration-guide">FISH-Dist Configuration Guide</h1>
+<p>FISH-Dist can be configured via a <strong>JSON configuration file</strong> instead of providing all command-line arguments. This is particularly useful if you run multiple experiments with the same setup, or want to save channel assignments, thresholds, and model paths.</p>
+<h3 id="json-structure">JSON Structure</h3>
+<table>
+<thead>
+<tr>
+<th>Key/Parameters</th>
+<th>Type</th>
+<th>Description</th>
+<th>Default / Required</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>root_path</code></td>
+<td>string</td>
+<td>Root folder containing <code>colocs/</code>, <code>controls/</code>, and <code>distances/</code></td>
+<td>Required if not specifying paths individually</td>
+</tr>
+<tr>
+<td><code>nucleus_channel</code></td>
+<td>int</td>
+<td>Index of the nuclear channel in your images</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>reference_channel</code></td>
+<td>int</td>
+<td>Index of the FISH channel used as reference for chromatic aberration correction</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>second_spot_channel</code></td>
+<td>int or list of int</td>
+<td>Index/indices of the other FISH channels to pair with the reference</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>pairing_threshold</code></td>
+<td>int</td>
+<td>Maximum distance (nm) to pair spots across channels</td>
+<td>3000</td>
+</tr>
+<tr>
+<td><code>area_threshold</code></td>
+<td>float</td>
+<td>Minimum area in px for detected objects in segmentation (optional)</td>
+<td>null</td>
+</tr>
+<tr>
+<td><code>run_seg</code></td>
+<td>bool</td>
+<td>Run segmentation step</td>
+<td>true</td>
+</tr>
+<tr>
+<td><code>run_gaussian_fit</code></td>
+<td>bool</td>
+<td>Run 3D Gaussian fitting for sub-pixel localization</td>
+<td>true</td>
+</tr>
+<tr>
+<td><code>run_distance_measurements</code></td>
+<td>bool</td>
+<td>Run distance measurements</td>
+<td>true</td>
+</tr>
+<tr>
+<td><code>run_ctrls</code></td>
+<td>bool</td>
+<td>Creates a set of images that allows for visual inspection of segmentation, pairs and distances</td>
+<td>true</td>
+</tr>
+<tr>
+<td><code>nuclear_model_to_use</code></td>
+<td>string</td>
+<td>Path to a custom nuclear segmentation model (tensorflow)</td>
+<td><code>"nuclear_model_0"</code></td>
+</tr>
+<tr>
+<td><code>spot_model_to_use</code></td>
+<td>string</td>
+<td>Path to a custom spot detection model (tensorflow)</td>
+<td><code>"spot_model_0"</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="example-configjson-files">Example <code>config.json</code>  Files</h3>
+<p>Below are several example <code>config.json</code> files illustrating common usage scenarios.<br />
+You only need to include the parameters relevant to your experiment—all others will fall back to sensible defaults.</p>
+<h3 id="example-1-minimal-configuration-default-channel-convention">Example 1 — Minimal Configuration (Default Channel Convention)</h3>
+<p>Use this configuration if your images follow the default channel order:</p>
+<ul>
+<li>Channel 0 → Nucleus  </li>
+<li>Channel 1 → Reference FISH  </li>
+<li>Channel 2 → Second FISH  </li>
+</ul>
+<pre><code class="language-json">{
+    &quot;root_path&quot;: &quot;/media/teamXXX/FISH_Dist_analysis&quot;
+}
+</code></pre>
+<p><strong>Note:</strong> the absence of a comma at the end of the last parameter is mandatory</p>
+<p>This is equivalent to running FISH-Dist without any configuration file, as long as your data follow the default convention.</p>
+<h3 id="example-2-custom-channel-assignment">Example 2 — Custom Channel Assignment</h3>
+<p>Use this configuration if your channels are ordered differently in the image file.        </p>
+<pre><code class="language-json">{
+    &quot;root_path&quot;: &quot;/media/teamXXX/FISH_Dist_analysis&quot;,
+    &quot;nucleus_channel&quot;: 1,
+    &quot;reference_channel&quot;: 2,
+    &quot;second_spot_channel&quot;: 3
+}
+</code></pre>
+<h3 id="example-3-multiple-fish-channels-one-to-many-pairing">Example 3 — Multiple FISH Channels (One-to-Many Pairing)</h3>
+<p>Use this configuration when measuring distances between one reference FISH channel and multiple other FISH channels.</p>
+<pre><code class="language-json">{
+    &quot;root_path&quot;: &quot;/media/teamXXX/FISH_Dist_analysis&quot;,
+    &quot;reference_channel&quot;: 1,
+    &quot;second_spot_channel&quot;: [2, 3, 4]
+}
+</code></pre>
+<p>Distances will be computed between the reference channel and each listed channel independently.</p>
+<h3 id="example-4-distance-measurement-only-reuse-existing-controls">Example 4 — Distance Measurement Only (Reuse Existing Controls)</h3>
+<p>Use this configuration when chromatic aberration correction has already been computed and you want to skip control generation.</p>
+<pre><code class="language-json">{
+    &quot;root_path&quot;: &quot;/media/teamXXX/FISH_Dist_analysis&quot;,
+    &quot;run_ctrls&quot;: false,
+    &quot;run_distance_measurements&quot;: true
+}
+</code></pre>
+<h3 id="example-5-disable-gaussian-fitting-faster-runtime">Example 5 — Disable Gaussian Fitting (Faster Runtime)</h3>
+<p>Use this configuration to speed up processing by skipping sub-pixel Gaussian fitting.</p>
+<pre><code class="language-json">{
+    &quot;root_path&quot;: &quot;/media/teamXXX/FISH_Dist_analysis&quot;,
+    &quot;run_gaussian_fit&quot;: false
+}
+</code></pre>
+<h3 id="example-6-custom-pairing-and-segmentation-parameters">Example 6 — Custom Pairing and Segmentation Parameters</h3>
+<p>Use this configuration when adjusting pairing distance or segmentation thresholds.</p>
+<pre><code class="language-json">{
+    &quot;root_path&quot;: &quot;/media/teamXXX/FISH_Dist_analysis&quot;,
+    &quot;pairing_threshold&quot;: 2000,
+    &quot;area_threshold&quot;: 50
+}
+</code></pre>
+<h3 id="example-7-full-explicit-configuration">Example 7 — Full Explicit Configuration</h3>
+<p>This example explicitly defines most parameters and is useful for reproducibility.</p>
+<pre><code class="language-json">{
+    &quot;root_path&quot;: &quot;/media/teamXXX/FISH_Dist_analysis&quot;,
+    &quot;nucleus_channel&quot;: 0,
+    &quot;reference_channel&quot;: 1,
+    &quot;second_spot_channel&quot;: [2, 3],
+    &quot;pairing_threshold&quot;: 3000,
+    &quot;area_threshold&quot;: null,
+    &quot;run_seg&quot;: true,
+    &quot;run_gaussian_fit&quot;: true,
+    &quot;run_distance_measurements&quot;: true,
+    &quot;run_ctrls&quot;: false
+}
+</code></pre>
+<h3 id="example-using-custom-segmentation-models">Example — Using Custom Segmentation Models</h3>
+<p>Use this configuration when you want to override the default deep learning models for nuclear segmentation while keeping the default FISH segmentation model.</p>
+<pre><code class="language-json">{
+    &quot;root_path&quot;: &quot;/media/teamXXX/FISH_Dist_analysis&quot;,
+    &quot;nuclear_model_to_use&quot;: &quot;/path/to/my_great_nuclear_model&quot;
+}
+</code></pre>
+<h2 id="using-the-configuration-file">Using the Configuration File</h2>
+<p>To run FISH-Dist with a configuration file, simply use:</p>
+<pre><code class="language-bash"># Run FISH-Dist using an explicit configuration file
+conda activate FISH_Dist
+python -m fishdist --config /path/to/config.json
+</code></pre>
+<p>Alternatively, if <code>config.json</code> is located inside the analysis root folder:</p>
+<pre><code class="language-bash"># Run FISH-Dist as ususal and it will read the config file automatically
+conda activate FISH_Dist
+python -m fishdist --root-path /path/to/FISH_Dist_analysis
+</code></pre>
+<p>The script will automatically override any command-line arguments with the values in the JSON file.</p>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href=".." class="btn btn-neutral float-left" title="FISH-Dist"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../API/" class="btn btn-neutral float-right" title="API">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/baigouy/fishdist" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+      <span><a href=".." style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../API/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>
