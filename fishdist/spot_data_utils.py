@@ -23,9 +23,8 @@ logger = TA_logger()  # logging_level=TA_logger.DEBUG
 
 
 
-# TODO --> add a tagging so that they can be grouped
 def get_green_and_blue_dots(src='coloc', order=['x','y','z'], TAG=False,
-                            check_voxel_size=True, atol=1e-6):
+                          check_voxel_size=True, atol=1e-6, table_name='points_n_distances3D_only_in_nuclei'):
     """
     Load measured (blue) and reference (green) 3D spot coordinates from FISH datasets, optionally returning tags.
 
@@ -39,6 +38,7 @@ def get_green_and_blue_dots(src='coloc', order=['x','y','z'], TAG=False,
         TAG (bool, optional): If True, returns an additional array of tags corresponding to the source of each point. Default is False.
         check_voxel_size (bool, optional): If True, ensures all files have the same voxel size. Default is True.
         atol (float, optional): Tolerance for voxel size comparison. Default is 1e-6.
+        table_name (str, optional): Name of the table to query. Default is 'points_n_distances3D_only_in_nuclei'.
 
     Returns:
         blue_spots (np.ndarray of shape (N, 3)): Measured (blue) 3D coordinates.
@@ -49,11 +49,11 @@ def get_green_and_blue_dots(src='coloc', order=['x','y','z'], TAG=False,
         ```python
         blue, green, tags = get_green_and_blue_dots(src='coloc', TAG=True)
         blue, green = get_green_and_blue_dots(src=['file1.czi', 'file2.czi'])
+        blue, green = get_green_and_blue_dots(src='coloc', table_name='points_n_distances3D_ch1_ch2_only_in_nuclei')
         ```
     """
 
     if isinstance(src, str):
-
 
         if False:
             # Connect to the SQLite database
@@ -82,7 +82,6 @@ def get_green_and_blue_dots(src='coloc', order=['x','y','z'], TAG=False,
         # User passed a list of files directly
         all_colocs = src
 
-
     # Check voxel sizes for consistency
     if check_voxel_size:
         voxel_size = None
@@ -110,16 +109,23 @@ def get_green_and_blue_dots(src='coloc', order=['x','y','z'], TAG=False,
             conn = sqlite3.connect(db_file)
             cursor = conn.cursor()
 
-            # Build query for points in nuclei
+            # Build query for points in the specified table
             if order is not None:
-                query = ('SELECT pt_1'+order[0]+'_px, pt_1'+order[1]+'_px, pt_1'+order[2]+'_px, '
-                         'pt_2'+order[0]+'_px, pt_2'+order[1]+'_px, pt_2'+order[2]+'_px ' +
+                # query = ('SELECT pt_1'+order[0]+'_px, pt_1'+order[1]+'_px, pt_1'+order[2]+'_px, '
+                #          'pt_2'+order[0]+'_px, pt_2'+order[1]+'_px, pt_2'+order[2]+'_px ' +
+                #          (', "'+all_colocs[file_idx]+'" AS filename' if TAG else '') +
+                #          f' FROM {table_name}')
+                query = ('SELECT '+order[0]+'1, '+order[1]+'1, '+order[2]+'1, '
+                         ''+order[0]+'2, '+order[1]+'2, '+order[2]+'2 ' +
                          (', "'+all_colocs[file_idx]+'" AS filename' if TAG else '') +
-                         ' FROM points_n_distances3D_only_in_nuclei')
+                         f' FROM {table_name}')
             else:
-                query = ('SELECT pt_1x_px, pt_1y_px, pt_1z_px, pt_2x_px, pt_2y_px, pt_2z_px ' +
+                # query = ('SELECT pt_1x_px, pt_1y_px, pt_1z_px, pt_2x_px, pt_2y_px, pt_2z_px ' +
+                #          (', "'+all_colocs[file_idx]+'" AS filename' if TAG else '') +
+                #          f' FROM {table_name}')
+                query = ('SELECT x1, y1, z1, x2, y2, z2 ' +
                          (', "'+all_colocs[file_idx]+'" AS filename' if TAG else '') +
-                         ' FROM points_n_distances3D_only_in_nuclei')
+                         f' FROM {table_name}')
 
             cursor.execute(query)
             results = cursor.fetchall()
@@ -140,18 +146,23 @@ def get_green_and_blue_dots(src='coloc', order=['x','y','z'], TAG=False,
             cursor.close()
             conn.close()
         except:
-            logger.error('Error occurred loading database, likely empty file.')
+            logger.error(f'Error occurred loading database {db_file}, likely empty file or table {table_name} not found.')
             traceback.print_exc()
 
     # Concatenate all coordinates
-    blue_spots = np.concatenate(blue_spots_all, axis=0)
-    green_spots = np.concatenate(green_spots_all, axis=0)
+    if blue_spots_all:
+        blue_spots = np.concatenate(blue_spots_all, axis=0)
+        green_spots = np.concatenate(green_spots_all, axis=0)
 
-    if TAG:
-        tags = np.concatenate(tags_all, axis=0)
-        return blue_spots, green_spots, tags
+        if TAG and tags_all:
+            tags = np.concatenate(tags_all, axis=0)
+            return blue_spots, green_spots, tags
+        else:
+            return blue_spots, green_spots
     else:
-        return blue_spots, green_spots
+        logger.warning(f'No valid spot pairs found in table {table_name}.')
+        return np.array([]), np.array([])
+
 
 
 def compute_pairwise_distance(coord_set1, coord_set2, rescaling_factor=None):

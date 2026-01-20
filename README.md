@@ -1,162 +1,193 @@
-# FISH-Dist: FISH Spot Detection and Analysis Pipeline
+# FISH-Dist: Automated 3D Distance Quantification for Confocal FISH Images
 
-A comprehensive Python pipeline for detecting, quantifying, and analyzing FISH (Fluorescence In Situ Hybridization) spots in 3D microscopy images using deep learning and chromatic aberration correction.
+**FISH-Dist** is a Python pipeline for detecting and **quantifying FISH** (Fluorescence In Situ Hybridization) probes in **3D confocal microscopy images**.
+It is designed for distance measurements between pairs of fluorescent signals across imaging channels.
 
 ## Overview
 
-FISH-Dist performs:
-- 3D nuclei and spot segmentation using deep learning
+FISH-Dist provides:
 
-- Sub-pixel spot localization with Gaussian fitting
+- 3D nuclei segmentation (deep learning)
+- FISH spot segmentation (deep learning)
+- Sub-pixel spot localization (3D Gaussian fitting)
+- Spot pairing across channels
+- Chromatic aberration correction (linear/affine)
+- Pairwise inter-spot distance measurements
+- Result visualization and reporting
 
-- Chromatic aberration correction via affine transformation
+## Install Conda
 
-- Spot pairing and distance quantification
+FISH-Dist requires Conda. If you don’t have it installed:
 
-- Visualization
+Download and **install Miniconda** (lightweight) or Anaconda (full package) from:  
 
-## Installation
+  - [Miniconda (recommended)](https://www.anaconda.com/docs/getting-started/miniconda/install#quickstart-install-instructions:~:text=Miniconda-,Installing%20Miniconda,-Copy%20page)  
+  - [Anaconda](https://www.anaconda.com/products/distribution)
+
+💡 Tip: Miniconda is usually faster and smaller; you can always install extra packages later.
+
+## Opening the Command Line
+
+FISH-Dist runs from a **command-line interface (CLI)**. The steps to open the terminal depend on your operating system:
+
+| Operating System | How to open the command line |
+|------------------|------------------------------|
+| **Windows**      | Press `Win + R`, type `cmd`, and hit Enter. <br> Or search for **Command Prompt** in the Start menu. <br> If you installed Anaconda/Miniconda, you can also use **Anaconda Prompt**. |
+| **MacOS**        | Press `Cmd + Space`, type `Terminal`, and hit Enter. <br> Or navigate to **Applications → Utilities → Terminal**. |
+| **Linux**        | Press `Ctrl + Alt + T` (works in most distributions). <br> Or search for **Terminal** in your applications menu. |
+
+## Verify Conda Installation
+
+After installing Conda, open a terminal (see [Opening the Command Line](#opening-the-command-line) instructions above) and type:
 
 ```bash
-pip install numpy scipy scikit-image pandas seaborn matplotlib
-pip install bigfish  # for Gaussian sub-pixel fitting
+conda --version
 ```
 
-## Quick Start
+You should see something like:
 
-### Basic Pipeline Execution
-
-```python
-from fishdist.fish_analysis_pipeline import run_analysis
-
-# Define your image paths
-paths = [
-    '/path/to/image1.tif',
-    '/path/to/image2.tif',
-]
-
-# Path to save correction matrices
-correction_matrix_path = '/path/to/output/corrections/'
-
-# Run full analysis
-run_analysis(
-    paths=paths,
-    correction_matrix_save_path=correction_matrix_path,
-    PAIRING_THRESHOLD=60,  # nm
-    ch_nuclei=0,  # Nuclear channel index
-    first_spot_channel=1,  # First FISH channel
-    second_spot_channel=2,  # Second FISH channel
-    RUN_SEG=True,
-    RUN_REG=True,
-    RUN_DISTANCE_MEASUREMENTS=True,
-    RUN_CTRLS=True
-)
+```text
+conda 24.10.0
 ```
 
-## Pipeline Stages
+If the command returns `command not found`, you need to [install Conda](#install-conda) first.
 
-### 1. Segmentation
+## Installation / Setup (one-time)
 
-Segments nuclei and spots using pre-trained deep learning models:
+In your [command line](#opening-the-command-line), type the following commands:
 
-```python
-segment_spots_and_nuclei(
-    paths=paths,
-    ch_nuclei=0,
-    first_spot_channel=1,
-    second_spot_channel=2,
-    channels_to_blur=[1, 2],  # Optional blur before segmentation
-    blur_mode='recursive2D',
-    deep_learning='rapid'
-)
+```bash
+# Create and activate the FISH-Dist environment
+conda create -y -n FISH_Dist python==3.10.12
+conda activate FISH_Dist
+
+# Upgrade pip and install FISH-Dist
+pip install --upgrade pip
+pip install fishdist
 ```
 
-**Output**: Binary masks saved as `ch0.tif`, `ch1.tif`, `ch2.tif`
+## Required Folder Structure
 
-### 2. Spot Detection
-
-Detects spot coordinates with optional Gaussian sub-pixel refinement:
-
-```python
-detect_spots_and_nuclei(
-    paths=paths,
-    ch_nuclei=0,
-    first_spot_channel=1,
-    second_spot_channel=2,
-    area_threshold=5,           # Minimum spot area
-    threshold_spot_ch1=0.5,     # Binarization threshold
-    threshold_spot_ch2=0.5,
-    threshold_nuclei=0.5
-)
+```text
+    FISH_Dist_analysis/
+    ├── colocs/        
+    ├── controls/      
+    └── distances/     
 ```
 
-**Output**: Spot coordinates saved to `FISH.db` tables:
-- `spots_ch1`: First channel spots
-- `spots_ch2`: Second channel spots
-- `nuclei`: Nuclear centroids
+| Folder       | Description                                                           |
+| ------------ |-----------------------------------------------------------------------|
+| `colocs/`    | Colocalization images for computing chromatic aberration.             |
+| `controls/`  | Stores registration matrices (`.npy`) from `colocs/`.                 |
+| `distances/` | Images for measuring distances between genomic loci.                  |
 
-### 3. Spot Pairing
+**Note:** Correction matrices can be reused across multiple datasets acquired under identical microscope settings, provided they are collected within a short time frame to ensure consistent chromatic aberrations.
 
-Pairs spots between channels based on proximity:
+## Example workflow
 
-```python
-pair_spots(
-    paths=paths,
-    PAIRING_THRESHOLD=250  # nm
-)
+FISH-Dist operates in **two sequential phases**. Understanding this order is essential for correct results.
+
+### Step 1 — Chromatic aberration correction
+
+- Acquire colocalization images:
+    - 1 nuclear channel
+    - 2 (or more) FISH channels targeting the same genomic locus
+    
+- Place images in `colocs/`.
+
+- Run the analysis:
+
+```bash
+conda activate FISH_Dist
+python fish_dist.py --root-path /path/to/FISH_Dist_analysis
 ```
 
-**Output**: Tables in `FISH.db`:
-- `points_n_distances3D`: All spot pairs
-- `points_n_distances3D_only_in_nuclei`: Nuclear-restricted pairs
+- Store generated `.npy` matrices in `controls/`.
 
-### 4. Chromatic Aberration Correction
+**Note:** Step 1 only needs to be performed once per microscope setup and imaging configuration, as long as chromatic aberrations remain stable.
 
-Computes global affine transformation from paired spots:
+### Step 2 — Distance Measurement
 
-```python
-compute_affine_transform_for_images(
-    paths=paths,
-    correction_matrix_save_path='/path/to/output/',
-    db_to_read='points_n_distances3D_only_in_nuclei',
-    USE_AFFINE_TRAFO_WITH_SHEAR=True
-)
+- Acquire distance-measurement images:
+
+    - Use the same microscope and imaging settings as for colocalization
+
+    - Acquire images shortly after the colocalization experiment to ensure stable chromatic aberrations
+
+    - Images should contain FISH probes targeting distinct genomic loci
+
+- Ensure appropriate `.npy` matrices are in `controls/`.
+
+- Place distance images in `distances/`.
+
+- Run FISH-Dist:
+
+```bash
+conda activate FISH_Dist
+python fish_dist.py --root-path FISH_Dist_analysis
 ```
 
-**Output**:
-- `affine_chromatic_aberration_correction.npy`: Transformation matrix
-- `voxel_size.npy`: Voxel scaling factors
-- Histogram plots before/after correction
+- Outputs:
 
-Apply correction to all datasets:
+    - Processed images → `distances/DONE/`
+    - Distance tables, plots, and reports
 
-```python
-apply_affine_transform_to_all_images(
-    paths=paths,
-    root_folder_path_to_affine_trafo_matrix='/path/to/corrections/',
-    table_name_to_apply_correction_to='points_n_distances3D_only_in_nuclei'
-)
+- Quality Control:
+   - Verify consistency between affine and linear corrections
+   - If **inconsistent, repeat Step 1** with newly acquired colocalization images.
+
+## Summary
+
+```text
+Colocalization images → colocs/ → Correction (.npy)
+                                     ↓
+                                 controls/
+                                     ↓
+Distance images → distances/ → Distance measurements → Check for consistency
 ```
 
-### 5. Visualization
+### Default Channel Convention
 
-Generate violin plots with statistical annotations:
+By default, FISH-Dist assumes the following channel layout in **3D confocal microscopy images**:
 
-```python
-plot_analysis(
-    paths=paths,
-    distance_cut_off=2.5,  # µm
-    group_files_by_name_similarity=True,
-    output_file_name='violin_plot.pdf',
-    table_names=[
-        'points_n_distances3D_only_in_nuclei_chromatic_aberrations_corrected'
-    ]
-)
+| Channel | Purpose                                                                                               |
+|--------:|-------------------------------------------------------------------------------------------------------|
+| **0** | Nucleus (used for nuclear segmentation)                                                               |
+| **1** | Reference FISH channel (channel used for aligning all other channels to)                              |
+| **2** | Second FISH channel (used for colocalization with the reference channel or for distance measurements) |
+
+**Note:**  
+If your datasets follow this channel order **and** you use the same channel configuration for both colocalization and distance measurements, **no configuration file is required**. You can run the pipeline using only the command-line interface.
+
+## Configuration File (Optional)
+
+By default, FISH-Dist follows the [Default Channel Convention](#default-channel-convention); if your data follow this channel order and you are not modifying any parameters, no configuration file is required.
+
+### When is a configuration file required?
+
+A JSON configuration file becomes necessary if you want to:
+
+- Use a different channel order
+- Analyze more than two FISH channels
+- Change thresholds or analysis parameters
+- Use custom segmentation models
+- Enable or disable specific pipeline steps
+- Re-run only part of the pipeline (e.g. skip registration or Gaussian fitting)
+
+For a full description of all available parameters and advanced examples, see
+👉 [Advanced settings (configuration file)](CONFIGURATION.md)
+
+## Uninstall
+
+To **completely remove** the `FISH_Dist` environment and all its dependencies, run:
+
+```bash
+conda remove --name FISH_Dist --all
 ```
 
 ## Citation
 
-If you use this FISH-Dist, please cite the associated manuscript. TODO.
+If you use this FISH-Dist, please cite the associated manuscript. **TODO**.
 
 ## License
 
@@ -164,7 +195,7 @@ This project is licensed under the BSD 3-Clause License - see the [LICENSE.txt](
 
 ## 3rd Party Licenses
 
-<font color='red'>IMPORTANT: If you disagree with any of the licenses below, <u>please uninstall FISH-Dist</u>. Additionally, ensure you review the licenses of all 3<sup>rd</sup> party dependencies used by the project, as they may have their own terms and conditions.</font>
+⚠️ IMPORTANT: If you disagree with any of the licenses below, uninstall FISH-Dist. Review all licenses of third-party dependencies.
 
 | Library name            | Use                                                                         | Link                                          | License            |
 |-------------------------|-----------------------------------------------------------------------------|-----------------------------------------------|--------------------|

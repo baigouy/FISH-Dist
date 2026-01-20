@@ -384,7 +384,7 @@ if __name__ == '__main__':
 
     if True:
         v0 = np.asarray( [[0,0, 0], [0,1, 0], [0,0, 1], [0,1, 1]])
-        M = Img('/E/Sample_images/FISH/Sample_transcription_dot_detection/manue_manually_segmented_images/training_set/tests/transmission_and_coloc_last_test_220916/affine_chromatic_aberration_correction.npy')
+        M = Img('/E/Sample_images/FISH/Sample_transcription_dot_detection/manue_manually_segmented_images/training_set/tests/transmission_and_coloc_last_test_220916/acc.npy')
         v1 = affineTransform(v0,M)
 
 

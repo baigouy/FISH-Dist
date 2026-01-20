@@ -61,6 +61,7 @@ setuptools.setup(
         "pyautogui",
         "imagecodecs",
         "psutil",
+        "bigfish",
         "batoolset",
         # "pyfigures",
         # "zarr",

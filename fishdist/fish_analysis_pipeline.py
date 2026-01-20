@@ -3,7 +3,7 @@
 import os.path
 import traceback
 from scipy.ndimage import generate_binary_structure, grey_dilation, gaussian_laplace
-from batoolset.SQLites.tools import get_column_from_sqlite_table, set_voxel_size
+from batoolset.SQLites.tools import get_column_from_sqlite_table, set_voxel_size, get_tables, drop_table_if_exists
 from batoolset.strings.tools import levenshtein_distance, _extract_base_name, longest_common_substring
 from batoolset.utils.loadlist import loadlist
 from spot_data_utils import compute_pairwise_distance
@@ -21,6 +21,7 @@ from fishdist.point_correction_and_analysis import perform_correction, \
     finalize_analysis_and_save_db
 from fishdist.spot_data_utils import get_green_and_blue_dots
 import os.path
+import sqlite3
 import matplotlib.pyplot as plt
 from skimage.measure import label, regionprops
 from skimage.measure._regionprops import RegionProperties
@@ -38,8 +39,8 @@ from fishdist.coordinate_utils import remove_out_of_bonds_coords_nd, get_cuboid
 import pandas as pd
 import seaborn as sns
 
-nuclear_model_to_use = 'nuclear_model_0' #'/E/Sample_images/FISH/Sample_transcription_dot_detection/manue_manually_segmented_images/trained_models/220916_new_nuclear_detection_model_retrained_including_gradient_fluo/nuclear_model_0.h5'
-spot_model_to_use = 'spot_model_0' #'/E/Sample_images/FISH/Sample_transcription_dot_detection/manue_manually_segmented_images/trained_models/221012_second_test_training_spots_with_gradients_and_imroved_ellipse_GT/spot_model_0.h5'  # second version of the model
+# nuclear_model_to_use = 'nuclear_model_0' #'/E/Sample_images/FISH/Sample_transcription_dot_detection/manue_manually_segmented_images/trained_models/220916_new_nuclear_detection_model_retrained_including_gradient_fluo/nuclear_model_0.h5'
+# spot_model_to_use = 'spot_model_0' #'/E/Sample_images/FISH/Sample_transcription_dot_detection/manue_manually_segmented_images/trained_models/221012_second_test_training_spots_with_gradients_and_imroved_ellipse_GT/spot_model_0.h5'  # se
 
 def merge_coords(*regions, remove_dupes=True):
     """
@@ -105,18 +106,29 @@ def apply_affine_trafo_to_image(image, affine_trafo_matrix):
     return new_img
 
 
+
+
+
 def compute_affine_transform_for_images(paths,
-                                        correction_matrix_save_path,
-                                        db_to_read='points_n_distances3D_only_in_nuclei',
-                                        USE_AFFINE_TRAFO_WITH_SHEAR=True,
-                                        use_median_n_IQR_filtering_of_coords=True):
+                                       correction_matrix_save_path,
+                                       ch1=1,
+                                       ch2=2,
+                                       db_to_read='points_n_distances3D',
+                                       USE_AFFINE_TRAFO_WITH_SHEAR=True,
+                                       use_median_n_IQR_filtering_of_coords=True,
+                                        # Add a parameter to indicate we don't want the 'only_in_nuclei' version
+                                        ):
     """
     Compute and save a global affine transformation matrix for multiple images based on spot coordinates.
 
     Args:
         paths (list[str]): List of file paths to images.
         correction_matrix_save_path (str): Directory where the affine matrix and plots will be saved.
-        db_to_read (str, optional): Database table to read spot coordinates from. Defaults to 'points_n_distances3D_only_in_nuclei'.
+        ch1 (int, optional): First channel number. Defaults to 1.
+        ch2 (int, optional): Second channel number. Defaults to 2.
+        db_to_read (str, optional): Database table prefix to read spot coordinates from.
+            The actual table name will be constructed as f'{db_to_read}_ch{ch1}_ch{ch2}_only_in_nuclei'.
+            Defaults to 'points_n_distances3D'.
         USE_AFFINE_TRAFO_WITH_SHEAR (bool, optional): Whether to include shear in the affine transformation. Defaults to True.
         use_median_n_IQR_filtering_of_coords (bool, optional): Whether to filter coordinate pairs using median ± IQR. Defaults to True.
 
@@ -127,15 +139,20 @@ def compute_affine_transform_for_images(paths,
         ```python
         paths = ['sample1.tif', 'sample2.tif']
         correction_path = 'correction_results'
-        compute_affine_transform_for_images(paths, correction_path)
-
+        compute_affine_transform_for_images(paths, correction_path, ch1=1, ch2=2)
         ```
     """
+
+
     pairs_1 = []  # more representative points may be selected
     pairs_2 = []
     full_pairs1 = []  # no selection for points
     full_pairs2 = []
     final_voxel_conversion_factor = None
+
+
+    # Construct the actual table name using the channel numbers
+    actual_table_name = f"{db_to_read}_ch{ch1}_ch{ch2}"
 
     for path in paths:
         voxel_conversion_factor = get_voxel_conversion_factor(path)
@@ -143,15 +160,15 @@ def compute_affine_transform_for_images(paths,
         # Ensure all datasets have same voxel size
         if final_voxel_conversion_factor is None:
             final_voxel_conversion_factor = voxel_conversion_factor
-        elif final_voxel_conversion_factor != voxel_conversion_factor:
+        elif not np.allclose(final_voxel_conversion_factor, voxel_conversion_factor):
             raise ValueError(
                 f'Pixel size differs between samples for {path}. Chromatic aberration correction impossible.'
             )
 
         path_to_db = smart_name_parser(path, 'FISH.db')
 
-        # Load all spot pairs and distances
-        spot_pairs = np.asarray(query_db_and_get_results(path_to_db, 'SELECT * FROM ' + db_to_read))
+        # Load all spot pairs and distances from the channel-specific table
+        spot_pairs = np.asarray(query_db_and_get_results(path_to_db, f'SELECT * FROM {actual_table_name}'))
         tmp_pairs1 = spot_pairs[..., 0:3]
         tmp_pairs2 = spot_pairs[..., 3:6]
         distances = spot_pairs[..., 6]
@@ -195,8 +212,11 @@ def compute_affine_transform_for_images(paths,
     median = np.median(corrected_distances)
     q1_q3 = get_q1_q3(corrected_distances)
 
+    # Create channel-specific filenames for outputs
+    base_filename = f"ch{ch1}_ch{ch2}"
+
     plot_histo(corrected_distances, median=median, q1_q3=q1_q3, title='before chromatic aberration correction')
-    plt.savefig(os.path.join(correction_matrix_save_path, 'pairs_before_chromatic_aberration_correction.png'))
+    plt.savefig(os.path.join(correction_matrix_save_path, f'{base_filename}_pairs_before_chromatic_aberration_correction.png'))
     plt.close(fig='all')
 
     # --- Compute corrected distances ---
@@ -212,19 +232,22 @@ def compute_affine_transform_for_images(paths,
     print('median', median)
     print('q1_q3', q1_q3)
 
-    # --- Plot distances before correction ---
-    plot_histo(corrected_distances, median=median, q1_q3=q1_q3, title='after chromatic aberration correction')
-    plt.savefig(os.path.join(correction_matrix_save_path, 'pairs_after_affine_chromatic_aberration_correction.png'))
+    # --- Plot distances after correction ---
+    plot_histo(corrected_distances, median=median, q1_q3=q1_q3, title='acc')
+    plt.savefig(os.path.join(correction_matrix_save_path, f'{base_filename}_pairs_after_acc.png'))
     plt.close(fig='all')
 
     print('Affine transformation matrix to apply:\n', M)
-    Img(M).save(os.path.join(correction_matrix_save_path, 'affine_chromatic_aberration_correction.npy'))
-    Img(np.asarray(final_voxel_conversion_factor)).save(os.path.join(correction_matrix_save_path, 'voxel_size.npy'))
+    Img(M).save(os.path.join(correction_matrix_save_path, f'{base_filename}_acc.npy'))
+    Img(np.asarray(final_voxel_conversion_factor)).save(os.path.join(correction_matrix_save_path, f'voxel_size.npy')) # voxel size is independent of channels
+
 
 def apply_affine_transform_to_all_images(
     paths,
     root_folder_path_to_affine_trafo_matrix,
-    table_name_to_apply_correction_to,
+    table_name_prefix='points_n_distances3D',
+    ch1=1,
+    ch2=2,
     atol=1e-6
 ):
     """
@@ -240,8 +263,14 @@ def apply_affine_transform_to_all_images(
 
     Args:
         paths (list[str]): List of dataset paths containing 'FISH.db'.
-        root_folder_path_to_affine_trafo_matrix (str): Path where affine matrix ('affine_chromatic_aberration_correction.npy') and voxel size ('voxel_size.npy') are saved.
-        table_name_to_apply_correction_to (str): Name of the table in each FISH.db to which the affine transformation will be applied.
+        root_folder_path_to_affine_trafo_matrix (str): Path where affine matrix and voxel size are saved.
+            Files should be named as 'ch{ch1}_ch{ch2}_acc.npy' and
+            'ch{ch1}_ch{ch2}_voxel_size.npy'.
+        table_name_prefix (str, optional): Prefix of the table in each FISH.db to which the affine transformation
+            will be applied. The actual table name will be constructed as f'{table_name_prefix}_ch{ch1}_ch{ch2}_only_in_nuclei'.
+            Defaults to 'points_n_distances3D'.
+        ch1 (int, optional): First channel number. Defaults to 1.
+        ch2 (int, optional): Second channel number. Defaults to 2.
         atol (float, optional): Absolute tolerance when comparing voxel sizes. Defaults to 1e-6.
 
     Returns:
@@ -251,15 +280,26 @@ def apply_affine_transform_to_all_images(
         ```python
         paths = ['sample1.tif', 'sample2.tif']
         root_folder = 'correction_results'
-        table_name = 'points_n_distances3D_only_in_nuclei'
-        apply_affine_transform_to_all_images(paths, root_folder, table_name)
-
+        apply_affine_transform_to_all_images(paths, root_folder, ch1=1, ch2=2)
         ```
     """
+    # Construct filenames with channel information
+    base_filename = f"ch{ch1}_ch{ch2}"
+    path_to_affine = os.path.join(root_folder_path_to_affine_trafo_matrix, f'{base_filename}_acc.npy')
 
-    # Load affine transformation and voxel size
-    path_to_affine = os.path.join(root_folder_path_to_affine_trafo_matrix, 'affine_chromatic_aberration_correction.npy')
-    path_to_voxel = os.path.join(root_folder_path_to_affine_trafo_matrix, 'voxel_size.npy')
+    # TODO --> maybe deactivate this !!! -> probably yes but ok for debug --> this is just for backwards compat
+    if not os.path.exists(path_to_affine):
+        try:
+            path_to_affine = os.path.join(root_folder_path_to_affine_trafo_matrix,'acc.npy')
+        except:
+            path_to_affine=os.path.join(root_folder_path_to_affine_trafo_matrix,'affine_chromatic_aberration_correction.npy')
+
+
+    path_to_voxel = os.path.join(root_folder_path_to_affine_trafo_matrix, 'voxel_size.npy') # there is only one voxel size file so this does not make sense
+
+    # Construct the actual table names
+    input_table_name = f"{table_name_prefix}_ch{ch1}_ch{ch2}"
+    output_table_name = f"{table_name_prefix}_ch{ch1}_ch{ch2}_acc"
 
     np.set_printoptions(suppress=True)
     M = Img(path_to_affine)  # affine transformation matrix
@@ -284,7 +324,7 @@ def apply_affine_transform_to_all_images(
 
             # Load coordinates from database
             spot_pairs = np.asarray(
-                query_db_and_get_results(path_to_db, 'SELECT * FROM ' + table_name_to_apply_correction_to))
+                query_db_and_get_results(path_to_db, f'SELECT * FROM {input_table_name}'))
             tmp_pairs1 = spot_pairs[..., 0:3]  # coordinates to transform
             tmp_pairs2 = spot_pairs[..., 3:6]  # reference coordinates
 
@@ -302,7 +342,7 @@ def apply_affine_transform_to_all_images(
             # Save corrected coordinates and distances to a new table
             add_to_db_sql(
                 sql_file=path_to_db,
-                table_name=table_name_to_apply_correction_to + '_chromatic_aberrations_corrected',
+                table_name=output_table_name,
                 headers=['z1', 'y1', 'x1', 'z2', 'y2', 'x2', 'distance'],
                 data_rows=total
             )
@@ -310,10 +350,10 @@ def apply_affine_transform_to_all_images(
             # Plot distance distribution after correction
             plot_distance_distribution(
                 distances,
-                smart_name_parser(path, table_name_to_apply_correction_to + '_chromatic_aberrations_corrected.png')
+                smart_name_parser(path, f'{output_table_name}.png')
             )
-        except:
-            print(f'Failed processing {path}. Most likely table does not exist or other error.')
+        except Exception as e:
+            print(f'Failed processing {path}. Error: {str(e)}')
             traceback.print_exc()
 
 
@@ -901,6 +941,8 @@ def plot_histo(distances, median=None, q1_q3=None, title=None):
 
 def finalize_quantifications_n_pairing(
     path_to_db,
+    first_spot_channel=1,
+    second_spot_channels=-1,
     PAIRING_THRESHOLD=250,
     voxel_conversion_factor=None,
     ONLY_DETECT_SPOTS_IN_NUCLEI=True
@@ -909,11 +951,13 @@ def finalize_quantifications_n_pairing(
     Compute spot pairing across channels and save distance statistics to a database.
 
     Args:
-        path_to_db (str): Path to the SQLite database containing the `nuclei`,
-            `spots_ch1`, and `spots_ch2` tables.
-        PAIRING_THRESHOLD (float, optional): Maximum allowed pairing distance
-            in pixels (unless a voxel conversion factor is provided).
-            Defaults to 250.
+        path_to_db (str): Path to the SQLite database.
+        first_spot_channel (int): Channel index for the reference spot channel.
+        second_spot_channels (list[int] or None): List of channel indices for spot channels
+            to pair with the first_spot_channel. If None, all channels except nuclei and
+            first_spot_channel are used.
+        PAIRING_THRESHOLD (float, optional): Maximum allowed pairing distance in pixels
+            (unless a voxel conversion factor is provided). Defaults to 250.
         voxel_conversion_factor (tuple or list or None, optional): Optional
             (z, y, x) conversion factors used to convert pixel distances to
             physical units (e.g., micrometers). Defaults to None.
@@ -930,11 +974,12 @@ def finalize_quantifications_n_pairing(
         path_to_db = "experiment/FISH.db"
         finalize_quantifications_n_pairing(
             path_to_db,
+            first_spot_channel=1,
+            second_spot_channels=[2, 3, 4],
             PAIRING_THRESHOLD=200,
             voxel_conversion_factor=(0.3, 0.1, 0.1),
             ONLY_DETECT_SPOTS_IN_NUCLEI=True
         )
-
         ```
     """
 
@@ -957,228 +1002,367 @@ def finalize_quantifications_n_pairing(
         except:
             print('No nuclei found --> ignoring pairing in nuclei')
 
-        # Load only well-scored spots
+        # Load only well-scored spots for first channel
         spots_ch1 = np.asarray(
-            query_db_and_get_results(path_to_db, 'SELECT * FROM spots_ch1 WHERE score >= 0.5')
-        )
-        spots_ch2 = np.asarray(
-            query_db_and_get_results(path_to_db, 'SELECT * FROM spots_ch2 WHERE score >= 0.5')
+            query_db_and_get_results(path_to_db, f'SELECT * FROM spots_ch{first_spot_channel} WHERE score >= 0.5')
         )
 
         # Store basic penetrance estimate
         data = [[
             len(nucs_ch0),
             len(spots_ch1),
-            len(spots_ch2),
             'nb nuclei may be underestimated'
         ]]
 
         add_to_db_sql(
             sql_file=path_to_db,
             table_name='penetrance_estimate',
-            headers=['nb_nuclei', 'nb_spots_ch1', 'nb_spots_ch2', 'warning'],
+            headers=['nb_nuclei', 'nb_spots_ch1', 'warning'],
             data_rows=data
         )
 
     else:
-        # Load unfiltered spot detections
-        spots_ch1 = np.asarray(query_db_and_get_results(path_to_db, 'SELECT * FROM spots_ch1'))
-        spots_ch2 = np.asarray(query_db_and_get_results(path_to_db, 'SELECT * FROM spots_ch2'))
-
+        # Load unfiltered spot detections for first channel
+        spots_ch1 = np.asarray(query_db_and_get_results(path_to_db, f'SELECT * FROM spots_ch{first_spot_channel}'))
 
     # ----------------------------------------------------------------------
     # Fix Gaussian-fit failures: remove extra columns if present
     # ----------------------------------------------------------------------
     if spots_ch1.shape[-1] == 5:
         spots_ch1 = spots_ch1[..., :-2]
-    if spots_ch2.shape[-1] == 5:
-        spots_ch2 = spots_ch2[..., :-2]
-
     if spots_ch1.shape[-1] == 4:
         spots_ch1 = spots_ch1[..., :-1]
-    if spots_ch2.shape[-1] == 4:
-        spots_ch2 = spots_ch2[..., :-1]
+
+    # If second_spot_channels is None, get all available spot channels
+    if second_spot_channels == -1:
+        # Query database to find all spot channel tables
+        tables = get_tables(path_to_db)
+        second_spot_channels = []
+        for table in tables:
+            if table.startswith('spots_ch') and table != f'spots_ch{first_spot_channel}':
+                try:
+                    # Extract channel number more robustly
+                    parts = table.split('_')
+                    if len(parts) >= 2:
+                        ch = int(parts[-1])
+                        second_spot_channels.append(ch)
+                except:
+                    continue
+
+    # Ensure second_spot_channels is a list
+    if not isinstance(second_spot_channels, list):
+        second_spot_channels = [second_spot_channels]
 
     # ----------------------------------------------------------------------
-    # Pairing step
+    # Process each second spot channel
     # ----------------------------------------------------------------------
-    # Convert threshold to µm if applicable
-    if not PAIR_MINIMIZING_PIXEL_DISTANCE:
-        threshold = (
-            PAIRING_THRESHOLD
-            if voxel_conversion_factor is None
-            else PAIRING_THRESHOLD * voxel_conversion_factor[1]
-        )
+    for ch2 in second_spot_channels:
+        print(f"Processing pairing between channel {first_spot_channel} and channel {ch2}")
 
-        paired = pair_points_by_distance(
-            spots_ch1,
-            spots_ch2,
-            threshold=threshold,
-            rescaling_factor=voxel_conversion_factor
-        )
-    else:
-        paired = pair_points_by_distance(
-            spots_ch1,
-            spots_ch2,
-            threshold=PAIRING_THRESHOLD
-        )
-
-    try:
-        # ----------------------------------------------------------------------
-        # Compute pairwise distances
-        # ----------------------------------------------------------------------
-        if not PAIR_MINIMIZING_PIXEL_DISTANCE:
-            distances = compute_pairwise_distance(
-                list(paired.keys()),
-                list(paired.values()),
-                rescaling_factor=None
-            )
+        # Load spots for the second channel
+        if ONLY_DETECT_SPOTS_IN_NUCLEI:
+            try:
+                spots_ch2 = np.asarray(
+                    query_db_and_get_results(path_to_db, f'SELECT * FROM spots_ch{ch2} WHERE score >= 0.5')
+                )
+            except:
+                continue
         else:
-            distances = compute_pairwise_distance(
-                list(paired.keys()),
-                list(paired.values()),
-                rescaling_factor=voxel_conversion_factor
-            )
+            try:
+                spots_ch2 = np.asarray(query_db_and_get_results(path_to_db, f'SELECT * FROM spots_ch{ch2}'))
+            except:
+                continue
 
-        median = np.median(distances)
-        q1_q3 = get_q1_q3(distances)
+        if spots_ch2 is None: # if the channel associated table does not exist -> just ignore and move on
+            continue
 
-        pts1 = np.asarray(list(paired.keys()))
-        pts2 = np.asarray(list(paired.values()))
-        distances = np.asarray(distances)[..., np.newaxis]
+        if not spots_ch2.shape:
+            continue
 
-        # Normalize to µm if needed
-        if voxel_conversion_factor is not None and not PAIR_MINIMIZING_PIXEL_DISTANCE:
-            pts1 /= voxel_conversion_factor
-            pts2 /= voxel_conversion_factor
+        # Fix Gaussian-fit failures: remove extra columns if present
+        if spots_ch2.shape[-1] == 5:
+            spots_ch2 = spots_ch2[..., :-2]
+        if spots_ch2.shape[-1] == 4:
+            spots_ch2 = spots_ch2[..., :-1]
 
-        # Final output array for DB insertion
-        total = np.hstack((pts1, pts2, distances))
-
-
-        add_to_db_sql(
-            sql_file=path_to_db,
-            table_name='points_n_distances3D' + ('_only_in_nuclei' if ONLY_DETECT_SPOTS_IN_NUCLEI else ''),
-            headers=[
-                'pt_1z_px', 'pt_1y_px', 'pt_1x_px',
-                'pt_2z_px', 'pt_2y_px', 'pt_2x_px',
-                'distance_µm'
-            ],
-            data_rows=total
-        )
-
-        # Average pairing displacement vector
-        average_displacement = np.average(
-            np.asarray(list(paired.keys())) - np.asarray(list(paired.values())),
-            axis=0
-        )
-        print('average_displacement:', average_displacement)
-
-        # Histogram drawing
-        unit = 'pixels' if voxel_conversion_factor is None else 'µm'
-        plot_histo(
-            distances,
-            median=median,
-            q1_q3=q1_q3,
-            title='pairing distance in ' + unit + str(
-                PAIRING_THRESHOLD if voxel_conversion_factor is None
+        # ----------------------------------------------------------------------
+        # Pairing step
+        # ----------------------------------------------------------------------
+        # Convert threshold to µm if applicable
+        if not PAIR_MINIMIZING_PIXEL_DISTANCE:
+            threshold = (
+                PAIRING_THRESHOLD
+                if voxel_conversion_factor is None
                 else PAIRING_THRESHOLD * voxel_conversion_factor[1]
             )
-        )
 
-        # Save histogram
-        fig_name = smart_name_appender(
-            'pairs_distances',
-            ONLY_DETECT_SPOTS_IN_NUCLEI,
-            '_only_in_nuclei_distances'
-        )
-
-        plt.savefig(
-            smart_name_parser(
-                smart_name_parser(path_to_db, 'parent'),
-                fig_name + '.png'
+            paired = pair_points_by_distance(
+                spots_ch1,
+                spots_ch2,
+                threshold=threshold,
+                rescaling_factor=voxel_conversion_factor
             )
-        )
-        plt.close(fig='all')
-    except:
-        traceback.print_exc()
-        print('Error in measuring distances --> probably an empty file')
+        else:
+            paired = pair_points_by_distance(
+                spots_ch1,
+                spots_ch2,
+                threshold=PAIRING_THRESHOLD
+            )
 
+        try:
+            # ----------------------------------------------------------------------
+            # Compute pairwise distances
+            # ----------------------------------------------------------------------
+            if not PAIR_MINIMIZING_PIXEL_DISTANCE:
+                distances = compute_pairwise_distance(
+                    list(paired.keys()),
+                    list(paired.values()),
+                    rescaling_factor=None
+                )
+            else:
+                distances = compute_pairwise_distance(
+                    list(paired.keys()),
+                    list(paired.values()),
+                    rescaling_factor=voxel_conversion_factor
+                )
 
-def put_this_somewhere_else_plotting_of_pairs_on_the_image_directly(
-    paths,
-    table_with_pairs_to_read
-):
+            median = np.median(distances)
+            q1_q3 = get_q1_q3(distances)
+
+            pts1 = np.asarray(list(paired.keys()))
+            pts2 = np.asarray(list(paired.values()))
+            distances = np.asarray(distances)[..., np.newaxis]
+
+            # Normalize to µm if needed
+            if voxel_conversion_factor is not None and not PAIR_MINIMIZING_PIXEL_DISTANCE:
+                pts1 /= voxel_conversion_factor
+                pts2 /= voxel_conversion_factor
+
+            # Final output array for DB insertion
+            total = np.hstack((pts1, pts2, distances))
+
+            # Generate table name with channel numbers in the new format
+            if ONLY_DETECT_SPOTS_IN_NUCLEI:
+                table_name = f'points_n_distances3D_only_in_nuclei_ch{first_spot_channel}_ch{ch2}'
+            else:
+                table_name = f'points_n_distances3D_ch{first_spot_channel}_ch{ch2}'
+
+            add_to_db_sql(
+                sql_file=path_to_db,
+                table_name=table_name,
+                headers=[
+                    'z1', 'y1', 'x1',
+                    'z2', 'y2', 'x2',
+                    'distance'
+                ],
+                data_rows=total
+            )
+
+            # Average pairing displacement vector
+            average_displacement = np.average(
+                np.asarray(list(paired.keys())) - np.asarray(list(paired.values())),
+                axis=0
+            )
+            print(f'Average displacement between ch{first_spot_channel} and ch{ch2}:', average_displacement)
+
+            # Histogram drawing
+            unit = 'pixels' if voxel_conversion_factor is None else 'µm'
+            plot_histo(
+                distances,
+                median=median,
+                q1_q3=q1_q3,
+                title=f'Pairing distance between ch{first_spot_channel} and ch{ch2} in {unit} (threshold: ' +
+                      str(PAIRING_THRESHOLD if voxel_conversion_factor is None
+                          else PAIRING_THRESHOLD * voxel_conversion_factor[1]) + ')'
+            )
+
+            # Save histogram with channel numbers in filename
+            fig_name = f'pairs_distances_ch{first_spot_channel}_ch{ch2}'
+            if ONLY_DETECT_SPOTS_IN_NUCLEI:
+                fig_name = f'pairs_distances_only_in_nuclei_ch{first_spot_channel}_ch{ch2}'
+
+            plt.savefig(
+                smart_name_parser(
+                    smart_name_parser(path_to_db, 'parent'),
+                    fig_name + '.png'
+                )
+            )
+            plt.close(fig='all')
+
+        except Exception as e:
+            traceback.print_exc()
+            print(f'Error in measuring distances for channels {first_spot_channel} and {ch2}: {str(e)}')
+
+def plot_all_paired_spots(paths, ch1=1, ch2=2):
     """
-    Render paired spot coordinates as 3D lines directly on the original image.
+    Render paired spot coordinates as 3D lines directly on the original image for all
+    available tables that start with 'points_n_distances3D'.
 
     Args:
         paths (list[str]): Paths to images from which the associated FISH
             databases are inferred.
-        table_with_pairs_to_read (list[str]): List of possible table names
-            containing paired coordinates. Tables are tried in order and must
-            contain six coordinate columns: (z1, y1, x1, z2, y2, x2).
 
     Returns:
         None: This function generates and saves binary images with rendered
-        3D lines but does not return a value.
-
-    Example:
-        ```python
-        paths = ["sample1.tif", "sample2.tif"]
-        tables = ["paired_spots", "paired_spots_fallback"]
-        put_this_somewhere_else_plotting_of_pairs_on_the_image_directly(
-            paths,
-            tables
-        )
-
-        ```
+        3D lines for each table but does not return a value.
     """
     for path in paths:
         try:
             # Locate the database corresponding to the image path
             path_to_db = smart_name_parser(path, 'FISH.db')
 
-            # Try each potential table until one is found
-            for table in table_with_pairs_to_read:
-                try:
-                    # Only 6 columns are needed: z1,y1,x1,z2,y2,x2
-                    spot_pairs = np.asarray(
-                        query_db_and_get_results(path_to_db, 'SELECT * FROM ' + table)
-                    )
-                    break
-                except Exception:
-                    print('table not found:', table)
-                    traceback.print_exc()
+            # Get all tables in the database that match the pattern
+            # all_tables = get_tables(path_to_db)
+            # pair_tables = [table for table in all_tables
+            #               if table.startswith('points_n_distances3D')]
+            #
+            # print(f"Found {len(pair_tables)} tables matching 'points_n_distances3D' pattern")
 
-            # Split table into channel 1 and channel 2 coordinates
-            tmp_pairs1 = spot_pairs[..., 0:3]
-            tmp_pairs2 = spot_pairs[..., 3:6]
+            # Process each pair table
+            # for table in pair_tables:
 
-            # Load corresponding image to obtain shape
-            image_for_drawing = Img(path)
-            image_for_drawing = np.zeros(
-                shape=image_for_drawing.shape[0:3],
-                dtype=np.uint8)
+            table = f'points_n_distances3D_only_in_nuclei_ch{ch1}_ch{ch2}'
+            try:
+                print(f"Processing table: {table}")
 
-            # Draw the 3D Bresenham line for each pair
-            for pt1, pt2 in zip(tmp_pairs1, tmp_pairs2):
-                coords = bresenham_nd(pt1, pt2)  # list of voxels forming the line
-                bounds = get_image_bounds(image_for_drawing)
-                coords_in_bounds_only = remove_out_of_bonds_coords_nd(coords, bounds)
+                # Only 6 columns are needed: z1,y1,x1,z2,y2,x2
+                spot_pairs = np.asarray(
+                    query_db_and_get_results(path_to_db, f'SELECT * FROM {table}')
+                )
 
-                # Paint the line in white (255)
-                image_for_drawing[tuple(coords_in_bounds_only.T)] = 255
+                # Skip if no pairs found
+                if spot_pairs.size == 0:
+                    print(f"No pairs found in table {table}, skipping")
+                    continue
 
-            # Save result
-            Img(image_for_drawing, dimensions='hwc').save(
-                smart_name_parser(path, 'pairs.tif'),
-                mode='raw'
-            )
-        except:
-            print('Error: something went wrong, no valid table may have been found.')
+                # Split table into channel 1 and channel 2 coordinates
+                tmp_pairs1 = spot_pairs[..., 0:3]
+                tmp_pairs2 = spot_pairs[..., 3:6]
+
+                # Load corresponding image to obtain shape
+                image_for_drawing = Img(path)
+                image_for_drawing = np.zeros(
+                    shape=image_for_drawing.shape[0:3],
+                    dtype=np.uint8
+                )
+
+                # Draw the 3D Bresenham line for each pair
+                for pt1, pt2 in zip(tmp_pairs1, tmp_pairs2):
+                    coords = bresenham_nd(pt1, pt2)  # list of voxels forming the line
+                    bounds = get_image_bounds(image_for_drawing)
+                    coords_in_bounds_only = remove_out_of_bonds_coords_nd(coords, bounds)
+
+                    # Paint the line in white (255)
+                    image_for_drawing[tuple(coords_in_bounds_only.T)] = 255
+
+                # Generate filename based on table name
+                output_filename = smart_name_parser(path, f'pairs_ch{ch1}_ch{ch2}.tif')
+
+                # Save result
+                Img(image_for_drawing, dimensions='hwc').save(
+                    output_filename,
+                    mode='raw'
+                )
+
+                print(f"Saved paired spots visualization to: {output_filename}")
+
+            except Exception as e:
+                print(f'Error processing table {table}: {str(e)}')
+                traceback.print_exc()
+
+        except Exception as e:
+            print(f'Error processing path {path}: {str(e)}')
             traceback.print_exc()
 
+
+def get_spot_channels(image_shape, ch_nuclei, first_spot_channel, second_spot_channel=None):
+    """
+    Returns a list of spot channel indices to use for image analysis.
+
+    If `second_spot_channel` is None, all channels except `ch_nuclei` and `first_spot_channel` are included.
+    If `second_spot_channel` is an integer, only that channel is included.
+    If `second_spot_channel` is a list, that list is returned directly.
+
+    Args:
+        image_shape (tuple): Shape of the image as (z, h, w, c).
+        ch_nuclei (int): Index of the nucleus channel.
+        first_spot_channel (int): Index of the first spot channel.
+        second_spot_channel (int or list or None, optional):
+            Index of the second spot channel. If None, all channels except `ch_nuclei` and
+            `first_spot_channel` are used. If an integer, only that channel is used.
+            If a list, that list is returned directly. Defaults to None.
+
+    Returns:
+        list: List of channel indices to use for spot analysis.
+
+    Example:
+        >>> image_shape = (10, 256, 256, 5)  # (z, h, w, c)
+        >>> ch_nuclei = 0
+        >>> first_spot_channel = 1
+        >>> second_spot_channel = None
+        >>> get_spot_channels(image_shape, ch_nuclei, first_spot_channel, second_spot_channel)
+        [2, 3, 4]
+
+        >>> second_spot_channel = 3
+        >>> get_spot_channels(image_shape, ch_nuclei, first_spot_channel, second_spot_channel)
+        [3]
+
+        >>> second_spot_channel = [2, 4]
+        >>> get_spot_channels(image_shape, ch_nuclei, first_spot_channel, second_spot_channel)
+        [2, 4]
+
+    """
+    if second_spot_channel is None:
+        z, h, w, c = image_shape
+        all_channels = list(range(c))
+        # Remove nucleus and first spot channel
+        spot_channels = [ch for ch in all_channels if ch != ch_nuclei and ch != first_spot_channel]
+    else:
+        if isinstance(second_spot_channel, int):
+            spot_channels = [second_spot_channel]
+        else:
+            spot_channels = second_spot_channel
+
+    return spot_channels
+
+def negative_to_positive_index(arr_shape, index):
+    """
+    Converts a negative index to a positive index for a NumPy ndarray.
+
+    Args:
+        arr_shape (tuple): Shape of the NumPy array (e.g., (z, h, w, c)).
+        index (int): The index to convert (can be negative or positive).
+
+    Returns:
+        int: The positive index.
+
+    Raises:
+        IndexError: If the index is out of bounds for the given array shape.
+
+    Example:
+        >>> arr_shape = (10, 256, 256, 5)
+        >>> negative_to_positive_index(arr_shape, -1)
+        4
+        >>> negative_to_positive_index(arr_shape, 2)
+        2
+    """
+    try:
+        index = int(index)
+    except:
+        pass
+    if isinstance(index, int):
+        if index < 0:
+            # Convert negative index to positive
+            return index + arr_shape[-1] if len(arr_shape) > 0 else index
+        else:
+            # Ensure the positive index is within bounds
+            if index >= arr_shape[-1]:
+                # raise IndexError(f"Index {index} is out of bounds for axis with size {arr_shape[-1]}")
+                return None
+            return index
+    else:
+        # print('index', index, type(index))
+        raise TypeError("Index must be an integer")
 
 def segment_spots_and_nuclei(
     paths,
@@ -1188,7 +1372,9 @@ def segment_spots_and_nuclei(
     __autoskip=True,
     channels_to_blur=None,
     blur_mode='recursive2D',
-    deep_learning='rapid'
+    deep_learning='rapid',
+    nuclear_model_to_use = 'nuclear_model_0',
+    spot_model_to_use = 'spot_model_0'
 ):
     """
     Segment nuclei and spot channels in microscopy images using deep-learning models.
@@ -1250,36 +1436,61 @@ def segment_spots_and_nuclei(
         # -------------------------------------------------------------
         if channels_to_blur:
             for ch in channels_to_blur:
+                ch = negative_to_positive_index(img.shape,ch)
+                if ch is None: # out of bonds index --> skip
+                    continue
                 print(f'blurring channel {ch} using {blur_mode}')
                 img[..., ch] = blur_3D(img[..., ch], mode=blur_mode)
 
         # -------------------------------------------------------------
         # Extract channels
         # -------------------------------------------------------------
-        try:
-            nuc = None if ch_nuclei is None else img[..., ch_nuclei]
-        except Exception:
-            nuc = None
-            print('nuclear channel undefined --> assuming no nuclei')
+        # try:
+        #     nuc = None if ch_nuclei is None else img[..., ch_nuclei]
+        # except Exception:
+        #     nuc = None
+        #     print('nuclear channel undefined --> assuming no nuclei')
+        #
+        # spot_ch1 = img[..., first_spot_channel]
+        # # NOTE: dirty hack mentioned in original code
+        # spot_ch2 = img[..., second_spot_channel]
+        #
+        # # free memory early
+        # del img
 
-        spot_ch1 = img[..., first_spot_channel]
-        # NOTE: dirty hack mentioned in original code
-        spot_ch2 = img[..., second_spot_channel]
+        if second_spot_channel is None:
+            spot_channels = get_spot_channels(img.shape, ch_nuclei, first_spot_channel, second_spot_channel)
+            second_spot_channel = spot_channels
+        else:
+            if not isinstance(second_spot_channel, list):
+                second_spot_channel = [second_spot_channel]
+            spot_channels = second_spot_channel # in theory I should check that there is no spot channel in there, I hope the user will not make mistakes
 
-        # free memory early
-        del img
+        # import sys
+        # print('second_spot_channel',second_spot_channel)
+        # sys.exit(0)
+
+        all_channels_to_analyze = [ch_nuclei, first_spot_channel]+spot_channels
+
+        all_channels_to_analyze = [negative_to_positive_index(img.shape, ch) for ch in all_channels_to_analyze] # fix indices
+
+        second_spot_channel= [negative_to_positive_index(img.shape, ch) for ch in second_spot_channel] # fix indices
 
         # -------------------------------------------------------------
         # Deep learning segmentation for each channel
         # Channels in order: [nucleus, spot1, spot2]
         # -------------------------------------------------------------
-        for iii, channel_img in enumerate([nuc, spot_ch1, spot_ch2]):
+        for iii, ch in enumerate(all_channels_to_analyze):
+            if ch is None: # channel out of bonds --> ignore
+                continue
 
-            output_name = smart_name_parser(path, f'ch{iii}.tif')
+            channel_img = img[..., ch]
+
+            output_name = smart_name_parser(path, f'ch{ch}.tif')
 
             # Skip segmentation if output exists
             if __autoskip and os.path.exists(output_name):
-                print(f'skipping {path} channel {iii} (already exists)')
+                print(f'skipping {path} channel {ch} (already exists)')
                 continue
 
             if channel_img is None:
@@ -1356,7 +1567,7 @@ def segment_spots_and_nuclei(
             # DO SPECIFY CHANNEL OF INTEREST IF MULTI CHANNELS
             predict_parameters["input_channel_of_interest"] = None
 
-            if iii > 0:
+            if iii != 0:
                 if spot_model_to_use in ('nuclear_model_0', 'spot_model_0'):
                     deepTA.load_or_build(architecture='Linknet', backbone='vgg16', activation='sigmoid', classes=1,
                                          pretraining=spot_model_to_use)  # --> ok that works and since I don't want to bother I'll use that
@@ -1402,6 +1613,103 @@ def segment_spots_and_nuclei(
         print('time for image:', path, timer() - start2)
 
 
+def set_nb_channels(db_path, nb_channels):
+    """
+    Inserts the number of channels of an image into an SQLite database table named 'nb_channels'
+    with a single column 'nb'.
+
+    Args:
+        db_path (str): The path to the SQLite database file.
+        nb_channels (int): The number of channels in the image.
+
+    Returns:
+        None.
+    """
+
+    # Delete table if exists
+    drop_table_if_exists(db_path, 'nb_channels', verbose=False)
+
+    if nb_channels is None:
+        return
+
+    # Connect to the SQLite database
+    conn = sqlite3.connect(db_path)
+
+    # Create a cursor object
+    c = conn.cursor()
+
+    # Create the 'nb_channels' table
+    c.execute('CREATE TABLE nb_channels ("nb_channels")')
+
+    # Insert the number of channels into the table
+    c.execute('INSERT INTO nb_channels (nb_channels) VALUES (?)', (nb_channels,))
+
+    # Commit the transaction
+    conn.commit()
+
+    # Close the cursor and database connection
+    c.close()
+    conn.close()
+
+def get_nb_channels(db_path):
+    """
+    Retrieves the number of channels from an SQLite database file.
+
+    Args:
+        db_path (str): The path to the SQLite database file.
+
+    Returns:
+        int or None: The number of channels if found, None otherwise.
+
+    Examples:
+        ```python
+        If the 'nb_channels' table in the database contains the value 3, then:
+
+        get_nb_channels('example.db')
+        3
+
+        If the 'nb_channels' table does not exist in the database file:
+
+        get_nb_channels('example.db')
+        None
+
+        If the database file does not exist:
+
+        get_nb_channels('nonexistent.db')
+        None
+        ```
+
+    """
+    if not os.path.exists(db_path):
+        return None
+
+    # Connect to the SQLite database
+    conn = sqlite3.connect(db_path)
+
+    # Create a cursor object
+    c = conn.cursor()
+
+    # Select the row from the 'nb_channels' table
+    try:
+        c.execute('SELECT nb_channels FROM nb_channels')
+        row = c.fetchone()
+
+        # If a row was found, return the number of channels
+        if row is not None:
+            nb_channels = row[0]
+        else:
+            nb_channels = None
+    except:
+        # Most likely table does not exist --> return None
+        nb_channels = None
+
+    # Close the cursor and database connection
+    c.close()
+    conn.close()
+
+    return nb_channels
+
+
 
 def detect_spots_and_nuclei(
     paths,
@@ -1411,9 +1719,8 @@ def detect_spots_and_nuclei(
     area_threshold=None,
     channels_to_blur=None,
     blur_mode='recursive2D',
-    threshold_spot_ch1=0.5,
     threshold_nuclei=0.5,
-    threshold_spot_ch2=0.5
+    threshold_spot=0.5,
 ):
     """
     Detect 3D nuclei and spot coordinates from deep-learning probability maps.
@@ -1423,22 +1730,18 @@ def detect_spots_and_nuclei(
         ch_nuclei (int or None, optional): Channel index of nuclei in the original
             image. If None, nuclei detection on the raw image is skipped.
             Defaults to 0.
-        first_spot_channel (int, optional): Channel index for spot channel 1
-            in the raw image. Defaults to 1.
-        second_spot_channel (int, optional): Channel index for spot channel 2
-            in the raw image. Defaults to -1.
+        spot_channels (list[int], optional): List of channel indices for spot detection.
+            Defaults to [1, 2].
         area_threshold (int or None, optional): Minimum ROI area threshold passed
             to `detect_spots`. Defaults to None.
         channels_to_blur (list[int] or None, optional): Channels in the raw image
             to blur before detection. Defaults to None.
         blur_mode (str, optional): Blur mode for 3D smoothing. Defaults to
             "recursive2D".
-        threshold_spot_ch1 (float, optional): Binarization threshold for the
-            deep-learning probability map of spot channel 1. Defaults to 0.5.
         threshold_nuclei (float, optional): Binarization threshold for the
             deep-learning probability map of the nuclear channel. Defaults to 0.5.
-        threshold_spot_ch2 (float, optional): Binarization threshold for the
-            deep-learning probability map of spot channel 2. Defaults to 0.5.
+        threshold_spot (float, optional): Binarization threshold for the
+            deep-learning probability map of spot channels. Defaults to 0.5.
 
     Returns:
         None: Detected nuclei and spot coordinates are written to the database.
@@ -1449,16 +1752,13 @@ def detect_spots_and_nuclei(
         detect_spots_and_nuclei(
             paths,
             ch_nuclei=0,
-            first_spot_channel=1,
-            second_spot_channel=2,
+            spot_channels=[1, 2, 3, 4],
             area_threshold=10,
             channels_to_blur=[0, 1],
             blur_mode="recursive2D",
-            threshold_spot_ch1=0.6,
             threshold_nuclei=0.5,
-            threshold_spot_ch2=0.6
+            threshold_spot=0.6
         )
-
         ```
     """
 
@@ -1481,6 +1781,9 @@ def detect_spots_and_nuclei(
         print('path --> ', path)
         orig = Img(path)
 
+        spot_channels = get_spot_channels(orig.shape, ch_nuclei, first_spot_channel, second_spot_channel)
+        spot_channels = [first_spot_channel] + spot_channels
+
         # ---------------------------------------------------------
         # Optional: blur certain channels in raw image
         # ---------------------------------------------------------
@@ -1496,7 +1799,11 @@ def detect_spots_and_nuclei(
         if COMPUTE_REAL_DISTANCE:
             voxel_conversion_factor = get_voxel_conversion_factor(orig, return_111_if_none=False)
 
-        # is that smart to do it like that it will overwrite user input -−> ok for now
+        # ---------------------------------------------------------
+        # Get nb of channels in raw image
+        # ---------------------------------------------------------
+        set_nb_channels(smart_name_parser(path, 'TA') + '/FISH.db', orig.shape[-1])
+
         if voxel_conversion_factor is not None:
             db = smart_name_parser(path, 'TA') + '/FISH.db'
             set_voxel_size(db, voxel_conversion_factor)
@@ -1505,108 +1812,94 @@ def detect_spots_and_nuclei(
             print("voxel size not found --> assuming isotropic voxels")
             voxel_conversion_factor = np.asarray([1., 1., 1.])
 
-
         # ---------------------------------------------------------
         # Extract original raw channels (Z,Y,X per channel)
         # ---------------------------------------------------------
-        try:
-            orig_ch0 = None if ch_nuclei is None else orig[..., ch_nuclei]
-        except Exception:
-            orig_ch0 = None
-            print("nuclear channel not found --> ignoring")
-
-        orig_ch1 = orig[..., first_spot_channel]
-        orig_ch2 = orig[..., second_spot_channel]
+        orig_nucs = None if ch_nuclei is None else orig[..., ch_nuclei]
 
         # ---------------------------------------------------------
-        # Load deep-learning probability maps
+        # Load deep-learning probability maps for nuclei
         # ---------------------------------------------------------
         try:
-            nucs_ch0 = Img(smart_name_parser(path, 'ch0.tif')) > threshold_nuclei
+            nucs_ch0 = Img(smart_name_parser(path, f'ch{ch_nuclei}.tif')) > threshold_nuclei
         except Exception:
             nucs_ch0 = None
             print("nuclear DL channel not found --> ignoring")
-
-        spots_ch1 = Img(smart_name_parser(path, 'ch1.tif')) > threshold_spot_ch1
-        spots_ch2 = Img(smart_name_parser(path, 'ch2.tif')) > threshold_spot_ch2
-
-        # ---------------------------------------------------------
-        # Run spot detection on each DL binarized mask
-        # ---------------------------------------------------------
-        spots_ch1 = np.asarray(
-            detect_spots(
-                spots_ch1,
-                orig_ch1,
-                validity_mask=nucs_ch0,
-                area_threshold=area_threshold,
-                minimal_diameter=EXTEND_PLANAR_OR_POINT_TO_DIAMETER,
-                smart_detect_spots=SMART_FILTER_AND_EXPAND_ROIs,
-                CUBOID_RADIUS=CUBOID_RADIUS,
-                gaussian_fit_3D=GAUSSIAN_FIT_3D,
-                voxel_size=voxel_conversion_factor
-            )
-        )
-
-        spots_ch2 = np.asarray(
-            detect_spots(
-                spots_ch2,
-                orig_ch2,
-                validity_mask=nucs_ch0,
-                area_threshold=area_threshold,
-                minimal_diameter=EXTEND_PLANAR_OR_POINT_TO_DIAMETER,
-                smart_detect_spots=SMART_FILTER_AND_EXPAND_ROIs,
-                CUBOID_RADIUS=CUBOID_RADIUS,
-                gaussian_fit_3D=GAUSSIAN_FIT_3D,
-                voxel_size=voxel_conversion_factor
-            )
-        )
-
-        # remove invalid entries
-        spots_ch1 = filter_nan_rows(spots_ch1)
-        spots_ch2 = filter_nan_rows(spots_ch2)
-
-        # ---------------------------------------------------------
-        # Decide table headers based on available columns
-        # ---------------------------------------------------------
-        header = ['z', 'y', 'x']
-        if spots_ch1.shape[-1] == 5:
-            header = ['z', 'y', 'x', 'score', 'successful_gaussian_fit']
-        elif spots_ch1.shape[-1] == 4:
-            header = ['z', 'y', 'x', 'score']
-
-        # ---------------------------------------------------------
-        # Save spot detections to DB
-        # ---------------------------------------------------------
-        sql_path = smart_name_parser(path, 'FISH.db')
-
-        add_to_db_sql(
-            sql_file=sql_path,
-            table_name='spots_ch1',
-            headers=header,
-            data_rows=spots_ch1
-        )
-
-        add_to_db_sql(
-            sql_file=sql_path,
-            table_name='spots_ch2',
-            headers=header,
-            data_rows=spots_ch2
-        )
 
         # ---------------------------------------------------------
         # Detect nuclei coordinates (simplified detection)
         # ---------------------------------------------------------
         if nucs_ch0 is not None:
-            nucs_ch0 = np.asarray(detect_spots(nucs_ch0, orig_ch0))
+            nucs_ch0 = np.asarray(detect_spots(nucs_ch0, orig_nucs))
             add_to_db_sql(
-                sql_file=sql_path,
+                sql_file=smart_name_parser(path, 'FISH.db'),
                 table_name='nuclei',
                 headers=['z', 'y', 'x'],
                 data_rows=nucs_ch0
             )
 
+        # ---------------------------------------------------------
+        # Process each spot channel dynamically
+        # ---------------------------------------------------------
+        for i, ch in enumerate(spot_channels):
+            print(f"Processing spot channel {ch}")
 
-def pair_spots(paths, PAIRING_THRESHOLD=250):
+            ch = negative_to_positive_index(orig.shape, ch)
+            if ch is None:  # channel out of bonds --> ignore
+                continue
+
+            # Extract raw channel
+            orig_ch = orig[..., ch]
+
+            try:
+                nucs_ch0 = Img(smart_name_parser(path, f'ch{ch_nuclei}.tif')) > threshold_nuclei
+            except Exception:
+                nucs_ch0 = None
+
+            # Load deep-learning probability map for spot channel
+            try:
+                spots_ch = Img(smart_name_parser(path, f'ch{ch}.tif')) > threshold_spot
+            except Exception:
+                print(f"spot DL channel {ch} not found --> skipping")
+                continue
+
+            # print('TESTING', spots_ch.shape, orig_ch.shape, nucs_ch0.shape) # indeed the last one is not ok --> why is that I guess I must mutate it somewhere
+
+            # Run spot detection
+            spots_ch = np.asarray(
+                detect_spots(
+                    spots_ch,
+                    orig_ch,
+                    validity_mask=nucs_ch0,
+                    area_threshold=area_threshold,
+                    minimal_diameter=EXTEND_PLANAR_OR_POINT_TO_DIAMETER,
+                    smart_detect_spots=SMART_FILTER_AND_EXPAND_ROIs,
+                    CUBOID_RADIUS=CUBOID_RADIUS,
+                    gaussian_fit_3D=GAUSSIAN_FIT_3D,
+                    voxel_size=voxel_conversion_factor
+                )
+            )
+
+            # Remove invalid entries
+            spots_ch = filter_nan_rows(spots_ch)
+
+            # Decide table headers based on available columns
+            header = ['z', 'y', 'x']
+            if spots_ch.shape[-1] == 5:
+                header = ['z', 'y', 'x', 'score', 'successful_gaussian_fit']
+            elif spots_ch.shape[-1] == 4:
+                header = ['z', 'y', 'x', 'score']
+
+            # Save spot detections to DB
+            add_to_db_sql(
+                sql_file=smart_name_parser(path, 'FISH.db'),
+                table_name=f'spots_ch{ch}',
+                headers=header,
+                data_rows=spots_ch
+            )
+
+
+def pair_spots(paths, PAIRING_THRESHOLD=250, first_spot_channel=1, second_spot_channels=-1):
     """
     Align and pair detected spots across channels for multiple datasets, both
     with and without restricting detection to nuclear regions.
@@ -1619,6 +1912,11 @@ def pair_spots(paths, PAIRING_THRESHOLD=250):
         paths (list[str]): List of file paths or dataset identifiers to process.
         PAIRING_THRESHOLD (float, optional): Maximum distance (in voxel units or
             scaled units) allowed for pairing spots. Defaults to 250.
+        first_spot_channel (int, optional): Channel index for the reference spot channel.
+            Defaults to 1.
+        second_spot_channels (list[int] or None, optional): List of channel indices for spot channels
+            to pair with the first_spot_channel. If None, all channels except nuclei and
+            first_spot_channel are used. Defaults to None.
 
     Returns:
         None: Results are written to the corresponding databases.
@@ -1626,13 +1924,17 @@ def pair_spots(paths, PAIRING_THRESHOLD=250):
     Example:
         ```python
         paths = ["sample_01.tif", "sample_02.tif"]
-        pair_spots(paths, PAIRING_THRESHOLD=200)
-
+        pair_spots(
+            paths,
+            PAIRING_THRESHOLD=200,
+            first_spot_channel=1,
+            second_spot_channels=[2, 3, 4]
+        )
         ```
     """
 
     for path in paths:
-        # load voxel scaling factor for this dataset
+        # Load voxel scaling factor for this dataset
         voxel_conversion_factor = get_voxel_conversion_factor(
             path,
             return_111_if_none=False
@@ -1643,22 +1945,28 @@ def pair_spots(paths, PAIRING_THRESHOLD=250):
         for value in [False, True]:
             finalize_quantifications_n_pairing(
                 smart_name_parser(path, 'FISH.db'),
+                first_spot_channel=first_spot_channel,
+                second_spot_channels=second_spot_channels,
                 ONLY_DETECT_SPOTS_IN_NUCLEI=value,
                 voxel_conversion_factor=voxel_conversion_factor,
                 PAIRING_THRESHOLD=PAIRING_THRESHOLD
             )
 
-def do_controls_for_easy_check(paths):
+
+def do_controls_for_easy_check(paths, ch1=1, ch2=2, ch_nuclei=0):
     """
     Generate quick visual control images for multi-channel datasets.
 
-    For each dataset path, the function loads available channels, processes
+    For each dataset path, the function loads specified channels, processes
     them (optional inversion, normalization, dilation), computes merged 3D
     stacks and maximum projections, and saves reduced-size versions for
     visual inspection.
 
     Args:
         paths (list[str]): List of dataset paths to process.
+        ch1 (int, optional): First channel index. Defaults to 1.
+        ch2 (int, optional): Second channel index. Defaults to 2.
+        ch_nuclei (int, optional): Nuclei channel index. Defaults to 0.
 
     Returns:
         None: The function saves control images to disk for each dataset.
@@ -1666,31 +1974,39 @@ def do_controls_for_easy_check(paths):
     Example:
         ```python
         paths = ["sample_01.tif", "sample_02.tif"]
-        do_controls_for_easy_check(paths)
-
+        do_controls_for_easy_check(paths, ch1=1, ch2=2, ch_nuclei=0)
         ```
     """
 
     for path in paths:
-        ch0 = None
-        print(path, ch0)
+        nuclei_channel = None
+        print(f"Processing {path} with channels: nuclei={ch_nuclei}, ch1={ch1}, ch2={ch2}")
 
-        # Load channel 0 if file exists
-        if os.path.exists(smart_name_parser(path, 'ch0.tif')):
-            ch0 = Img(smart_name_parser(path, 'ch0.tif'))
-            max_ch0 = np.max(ch0, axis=0)
-            max_ch0 = invert(max_ch0)
+        # Load nuclei channel if file exists
+        if os.path.exists(smart_name_parser(path, f'ch{ch_nuclei}.tif')):
+            nuclei_channel = Img(smart_name_parser(path, f'ch{ch_nuclei}.tif'))
+            max_nuclei = np.max(nuclei_channel, axis=0)
+            max_nuclei = invert(max_nuclei)
 
-        if ch0 is not None:
-            ch0 = invert(ch0)
+        if nuclei_channel is not None:
+            nuclei_channel = invert(nuclei_channel)
 
-        # Load channels 1 and 2
-        ch1 = Img(smart_name_parser(path, 'ch1.tif'))
-        ch2 = Img(smart_name_parser(path, 'ch2.tif'))
+        # Load specified channels
+        try:
+            ch1_img = Img(smart_name_parser(path, f'ch{ch1}.tif'))
+        except:
+            print(f"Channel {ch1} not found for {path}")
+            continue
+
+        try:
+            ch2_img = Img(smart_name_parser(path, f'ch{ch2}.tif'))
+        except:
+            print(f"Channel {ch2} not found for {path}")
+            continue
 
         # Process pairs channel if present
-        if os.path.exists(smart_name_parser(path, 'pairs.tif')):
-            ch3 = Img(smart_name_parser(path, 'pairs.tif')).astype(float)
+        if os.path.exists(smart_name_parser(path, f'pairs_ch{ch1}_ch{ch2}.tif')):
+            ch3 = Img(smart_name_parser(path, f'pairs_ch{ch1}_ch{ch2}.tif')).astype(float)
             ch3 = ch3 / ch3.max()  # normalize to 0-1
 
             # Maximum projection along the first axis
@@ -1704,44 +2020,45 @@ def do_controls_for_easy_check(paths):
 
             # Save dilated max projection
             Img(max_connection, dimensions='hw').save(
-                smart_name_parser(path, 'control_max_proj_pairs_only_dilated.tif')
+                smart_name_parser(path, f'control_max_proj_pairs_only_dilated_ch{ch1}_ch{ch2}.tif')
             )
             del max_connection
 
             # Stack channels for 3D merged image
-            if ch0 is None:
-                merge = np.stack((ch1, ch2, ch3), axis=-1)
+            if nuclei_channel is None:
+                merge = np.stack((ch1_img, ch2_img, ch3), axis=-1)
             else:
-                merge = np.stack((ch0, ch1, ch2, ch3), axis=-1)
-            del ch1, ch2, ch3
+                merge = np.stack((nuclei_channel, ch1_img, ch2_img, ch3), axis=-1)
+            del ch1_img, ch2_img, ch3
 
         else:
             # Stack only available channels
-            if ch0 is None:
-                merge = np.stack((ch1, ch2), axis=-1)
+            if nuclei_channel is None:
+                merge = np.stack((ch1_img, ch2_img), axis=-1)
             else:
-                merge = np.stack((ch0, ch1, ch2), axis=-1)
-            del ch1, ch2
+                merge = np.stack((nuclei_channel, ch1_img, ch2_img), axis=-1)
+            del ch1_img, ch2_img
 
         # Compute max projection and threshold for reduced-size visualization
         max_proj = np.max(merge, axis=0)
         tmp = (merge > 0.5).astype(np.uint8)
         del merge
         merge = tmp * 255
-        Img(merge, dimensions='dhwc').save(smart_name_parser(path, 'control_3D.tif'))
+        Img(merge, dimensions='dhwc').save(smart_name_parser(path, f'control_3D_ch{ch1}_ch{ch2}.tif'))
         del merge
 
-        # Replace ch0 channel in max projection with original if present
-        if ch0 is not None:
-            max_proj[..., 0] = max_ch0
-            del ch0
+        # Replace nuclei channel in max projection with original if present
+        if nuclei_channel is not None:
+            max_proj[..., 0] = max_nuclei
+            del nuclei_channel
 
         # Threshold and save final max projection
         max_proj = ((max_proj > 0.5) * 255).astype(np.uint8)
         Img(max_proj, dimensions='hwc').save(
-            smart_name_parser(path, 'control_max_proj.tif')
+            smart_name_parser(path, f'control_max_proj_ch{ch1}_ch{ch2}.tif')
         )
         del max_proj
+
 
 
 def run_analysis(
@@ -1762,6 +2079,9 @@ def run_analysis(
     RUN_REG=False,
     RUN_DISTANCE_MEASUREMENTS=True,
     RUN_CTRLS=True,
+    RUN_GAUSSIAN_FIT=True,
+    nuclear_model_to_use = 'nuclear_model_0',
+    spot_model_to_use = 'spot_model_0',
     list_pairs_for_reg=None
 ):
     """
@@ -1814,9 +2134,14 @@ def run_analysis(
     start = timer()
     print('Analysis started')
 
+    if not isinstance(second_spot_channel, list):
+        second_spot_channels = [second_spot_channel]
+    else:
+        second_spot_channels = second_spot_channel
+
     # --- Segmentation and spot detection ---
-    if RUN_SEG:
-        if True: #TODO allow not to do that because gaussian fit can be very long and it is useless to do it if it already exists
+    if RUN_SEG or RUN_GAUSSIAN_FIT:
+        if RUN_SEG:
             segment_spots_and_nuclei(
                 paths,
                 ch_nuclei=ch_nuclei,
@@ -1824,96 +2149,200 @@ def run_analysis(
                 second_spot_channel=second_spot_channel,
                 channels_to_blur=channels_to_blur,
                 blur_mode=blur_mode,
-                deep_learning=deep_learning
+                deep_learning=deep_learning,
+                nuclear_model_to_use = nuclear_model_to_use,
+                spot_model_to_use = spot_model_to_use
             )
 
+        if RUN_GAUSSIAN_FIT:
             detect_spots_and_nuclei(
                 paths,
                 ch_nuclei=ch_nuclei,
                 first_spot_channel=first_spot_channel,
                 second_spot_channel=second_spot_channel,
+                # spot_channels=,
                 area_threshold=area_threshold,
                 channels_to_blur=channels_to_blur,
                 blur_mode=blur_mode
             )
 
-        pair_spots(paths, PAIRING_THRESHOLD=PAIRING_THRESHOLD)
 
-        # Optional: plot pairs directly on images
-        put_this_somewhere_else_plotting_of_pairs_on_the_image_directly(
-            paths,
-            ['points_n_distances3D_only_in_nuclei', 'points_n_distances3D']
-        )
+        pair_spots(paths, PAIRING_THRESHOLD=PAIRING_THRESHOLD, first_spot_channel=first_spot_channel, second_spot_channels=second_spot_channel)
 
     # --- Correction and analysis of green/blue spots ---
     if True:  # TODO --> maybe put this as a parameter
+        # try:
+        #
+        #     # compute registration center on 0
+        #     MASK = True
+        #     order = ['z', 'y', 'x']   # consistent coordinate order
+        #     blue_spots, green_spots, tags = get_green_and_blue_dots(src=paths, order=order, TAG=MASK)
+        #     # Call the correction function
+        #     corrected_spots = perform_correction(blue_spots, green_spots)
+        #     finalize_analysis_and_save_db(blue_spots, corrected_spots, green_spots, tags, order=order, MASK=MASK)
+        # except:
+        #     print('an error occurred with the gregor method, maybe empty files')
+        #     traceback.print_exc()
         try:
-            # compute registration center on 0
-            MASK = True
-            order = ['z', 'y', 'x']   # consistent coordinate order
-            blue_spots, green_spots, tags = get_green_and_blue_dots(src=paths, order=order, TAG=MASK)
-            # Call the correction function
-            corrected_spots = perform_correction(blue_spots, green_spots)
-            finalize_analysis_and_save_db(blue_spots, corrected_spots, green_spots, tags, order=order, MASK=MASK)
+            # Loop through each path
+            for path in paths:
+                try:
+                    # Get the database path
+                    db_path = smart_name_parser(path, 'TA') + '/FISH.db'
+
+                    # Connect to the database to find tables
+                    conn = sqlite3.connect(db_path)
+                    cursor = conn.cursor()
+
+                    # Get all tables that match the pattern
+                    cursor.execute("""
+                                   SELECT name
+                                   FROM sqlite_master
+                                   WHERE type = 'table'
+                                     AND name LIKE 'points_n_distances3D_only_in_nuclei%'
+                                       AND name NOT LIKE '%acc%'
+                                   """)
+                    tables = [table[0] for table in cursor.fetchall()]
+                    cursor.close()
+                    conn.close()
+
+                    # Process each table
+                    for table in tables:
+                        try:
+                            # Set up parameters
+                            MASK = True
+                            order = ['z', 'y', 'x']  # consistent coordinate order
+
+                            # Get spots for this specific table
+                            blue_spots, green_spots, tags = get_green_and_blue_dots(
+                                src=[path],
+                                order=order,
+                                TAG=MASK,
+                                table_name=table
+                            )
+
+                            # Skip if no spots found
+                            if len(blue_spots) == 0 or len(green_spots) == 0:
+                                print(f"No spots found in table {table}, skipping")
+                                continue
+
+                            # Call the correction function
+                            corrected_spots = perform_correction(blue_spots, green_spots)
+
+                            # Generate output filename based on table name
+                            # output_filename = smart_name_parser(
+                            #     path,
+                            #     f'{table}_null_vector_method'
+                            # )
+
+
+                            # Finalize analysis and save to DB with the output filename
+                            finalize_analysis_and_save_db(
+                                blue_spots,
+                                corrected_spots,
+                                green_spots,
+                                tags,
+                                order=order,
+                                MASK=MASK,
+                                output_filename=f'{table}_lcc'
+                            )
+
+                        except:
+                            print('Error processing table')
+                            traceback.print_exc()
+
+                except:
+                    print(f'Error accessing database for path {path}')
+                    traceback.print_exc()
+
         except:
-            print('an error occurred with the gregor method, maybe empty files')
+            print('An error occurred with the registration method')
             traceback.print_exc()
 
     # --- Registration ---
     if RUN_REG:
         USE_AFFINE_TRAFO_WITH_SHEAR = True
-        try:
-            db_to_read = 'points_n_distances3D_only_in_nuclei'
-            compute_affine_transform_for_images(list_pairs_for_reg, correction_matrix_save_path, db_to_read=db_to_read,
-                                                USE_AFFINE_TRAFO_WITH_SHEAR=USE_AFFINE_TRAFO_WITH_SHEAR)
-        except:
-            # in case nuclei do not exist
-            db_to_read = 'points_n_distances3D'
-            compute_affine_transform_for_images(list_pairs_for_reg, correction_matrix_save_path, db_to_read=db_to_read,
-                                                USE_AFFINE_TRAFO_WITH_SHEAR=USE_AFFINE_TRAFO_WITH_SHEAR)
+        # Convert second_spot_channel to a list if it's not already
+
+
+        # Process each channel in the list
+        for ch2 in second_spot_channels:
+            # Convert negative channel index to positive
+
+                db_to_read = 'points_n_distances3D_only_in_nuclei'
+                # First try with the 'only_in_nuclei' table
+                try:
+                    compute_affine_transform_for_images(
+                        list_pairs_for_reg,
+                        correction_matrix_save_path,
+                        ch1=first_spot_channel,
+                        ch2=ch2,
+                        db_to_read=db_to_read,  # This will be used as a prefix
+                        USE_AFFINE_TRAFO_WITH_SHEAR=USE_AFFINE_TRAFO_WITH_SHEAR
+                    )
+                except:
+                    try:
+                        db_to_read = 'points_n_distances3D'
+                        compute_affine_transform_for_images(
+                            list_pairs_for_reg,
+                            correction_matrix_save_path,
+                            ch1=first_spot_channel,
+                            ch2=ch2,
+                            db_to_read=db_to_read,  # This will be used as a prefix
+                            USE_AFFINE_TRAFO_WITH_SHEAR=USE_AFFINE_TRAFO_WITH_SHEAR,
+                            # Add a parameter to indicate we don't want the 'only_in_nuclei' version
+                        )
+                    except Exception as e:
+                        print(f"Failed to compute affine transform for channels {first_spot_channel} and {ch2}: {str(e)}")
+                        traceback.print_exc()
 
     # --- Apply affine transform and measure distances ---
     if RUN_DISTANCE_MEASUREMENTS:
-        tables_to_apply = [
+        table_prefixes = [
             'points_n_distances3D',
             'points_n_distances3D_only_in_nuclei'
         ]
-        for table in tables_to_apply:
-            apply_affine_transform_to_all_images(paths, correction_matrix_save_path, table)
+        for ch2 in second_spot_channels:
+            for table_prefix in table_prefixes:
 
-        # # Optional: human curated distances
-        # try:
-        #     table = 'human_curated_distances_3D'
-        #     apply_affine_transform_to_all_images(paths, correction_matrix_save_path, table)
-        # except:
-        #     traceback.print_exc()
-        #     print('No human curated file found')
-
-        # Optional: null vector method for chromatic aberration correction
-        try:
-            table = 'points_n_distances3D_only_in_nuclei_chromatic_aberrations_corrected_null_vector_method'
-            for path in paths:
+                # Construct the actual table name using the channel numbers
+                # table_name = f"{table_prefix}_ch{second_spot_channel}_ch{second_spot_channel}"
                 try:
-                    distances = get_column_from_sqlite_table(
-                        smart_name_parser(path, 'TA') + '/FISH.db',
-                        table,
-                        'distance'
-                    )
-                    distances = np.array(distances, dtype=float)
-                    plot_distance_distribution(
-                        distances,
-                        smart_name_parser(path, 'TA') + '/' + table + '.png'
-                    )
+                    apply_affine_transform_to_all_images(paths, correction_matrix_save_path, table_prefix,  ch1=first_spot_channel,
+                        ch2=ch2)
                 except:
+                    print(f'error applying reg for channels ch{first_spot_channel} and ch{ch2}')
                     traceback.print_exc()
-                    print('Null vector plotting failed for', path)
-        except:
-            traceback.print_exc()
-            print('Error in null vector method analysis')
 
-    # --- Controls ---
-    if RUN_CTRLS:
-        do_controls_for_easy_check(paths)
+            # # Optional: human curated distances
+            # try:
+            #     table = 'human_curated_distances_3D'
+            #     apply_affine_transform_to_all_images(paths, correction_matrix_save_path, table)
+            # except:
+            #     traceback.print_exc()
+            #     print('No human curated file found')
+
+            # Optional: null vector method for chromatic aberration correction
+            try:
+                table = f'points_n_distances3D_only_in_nuclei_ch{first_spot_channel}_ch{ch2}_lcc'
+                for path in paths:
+                    try:
+                        distances = get_column_from_sqlite_table(
+                            smart_name_parser(path, 'TA') + '/FISH.db',
+                            table,
+                            'distance'
+                        )
+                        distances = np.array(distances, dtype=float)
+                        plot_distance_distribution(
+                            distances,
+                            smart_name_parser(path, 'TA') + '/' + table + '.png'
+                        )
+                    except:
+                        traceback.print_exc()
+                        print('Null vector plotting failed for', path)
+            except:
+                traceback.print_exc()
+                print('Error in null vector method analysis')
 
     # --- Plotting final results (violin plots) ---
     if True:
@@ -1923,18 +2352,37 @@ def run_analysis(
             date_str = now.strftime('%Y-%m-%d_%H-%M-%S_')
             parent = smart_name_parser(paths[0], 'parent')
 
-            plot_analysis(paths,
-                          group_files_by_name_similarity=True,
-                          output_file_name=os.path.join(parent, date_str + 'violin_plot.pdf'),
-                          table_names=[
-                              # 'human_curated_distances_3D_chromatic_aberrations_corrected',
-                              'points_n_distances3D_only_in_nuclei_chromatic_aberrations_corrected',
-                              'points_n_distances3D_only_in_nuclei_chromatic_aberrations_corrected_null_vector_method'])
+            # Define base table names
+            # base_table_names = [
+            #     'points_n_distances3D_only_in_nuclei_acc',
+            #     'points_n_distances3D_only_in_nuclei_lcc'
+            # ]
 
-            print('saving violin plot to', os.path.join(parent, date_str + 'violin_plot.pdf'))
+            for ch2 in second_spot_channels:
+
+                plot_analysis(paths,
+                              group_files_by_name_similarity=True,
+                              output_file_name=os.path.join(parent, date_str + f'violin_plot_ch{first_spot_channel}_ch{ch2}.pdf'),
+                              table_names=[
+                                  # 'human_curated_distances_3D_acc',
+                                  f'points_n_distances3D_only_in_nuclei_ch{first_spot_channel}_ch{ch2}_acc',
+                                  f'points_n_distances3D_only_in_nuclei_ch{first_spot_channel}_ch{ch2}_lcc'])
+
+                print('saving violin plot to', os.path.join(parent, date_str + f'violin_plot_ch{first_spot_channel}_ch{ch2}.pdf'))
         except:
             traceback.print_exc()
             print('error in plot')
+
+    # --- Controls ---
+    if RUN_CTRLS:
+        # Optional: plot pairs directly on images
+        for ch2 in second_spot_channels:
+            plot_all_paired_spots(
+                paths, ch1=first_spot_channel, ch2=ch2
+                # ['points_n_distances3D_only_in_nuclei', 'points_n_distances3D']
+            )
+        for ch2 in second_spot_channels:
+            do_controls_for_easy_check(paths, ch_nuclei=ch_nuclei, ch1=first_spot_channel, ch2=ch2)
 
     print('total time', timer() - start)
 
@@ -1984,8 +2432,6 @@ def blur_3D(single_channel_image, mode='real 3D', sigma=2.):
 
     return single_channel_image
 
-
-# TODO --> offer blur for both the fit and prior to spot detection --> TODO ---> à tester peut etre sur une seule image pr comparaison
 
 def plot_violin_with_median(data, **kwargs):
     """
@@ -2045,9 +2491,9 @@ def plot_analysis(
     group_files_by_name_similarity=False,
     output_file_name=None,
     table_names=[
-        # 'human_curated_distances_3D_chromatic_aberrations_corrected',
-        'points_n_distances3D_only_in_nuclei_chromatic_aberrations_corrected',
-        'points_n_distances3D_only_in_nuclei_chromatic_aberrations_corrected_null_vector_method'
+        # 'human_curated_distances_3D_acc',
+        'points_n_distances3D_only_in_nuclei_acc',
+        'points_n_distances3D_only_in_nuclei_lcc'
     ]
 ):
     """
@@ -2082,6 +2528,7 @@ def plot_analysis(
         for path in paths
     ]
     print('Resolved FISH.db paths:', paths)
+    print('table_names', table_names)
 
     # Combine distance data from all databases and tables
     header, data = combine_single_file_queries(
@@ -2239,9 +2686,9 @@ if __name__ == '__main__':
     #                           group_files_by_name_similarity=True,
     #                           output_file_name=os.path.join(parent, date_str + 'violin_plot.pdf'),
     #                           table_names=[
-    #                               'human_curated_distances_3D_chromatic_aberrations_corrected',
-    #                               'points_n_distances3D_only_in_nuclei_chromatic_aberrations_corrected',
-    #                               'points_n_distances3D_only_in_nuclei_chromatic_aberrations_corrected_null_vector_method'])
+    #                               'human_curated_distances_3D_acc',
+    #                               'points_n_distances3D_only_in_nuclei_acc',
+    #                               'points_n_distances3D_only_in_nuclei_lcc'])
     #
     #             print('saving violin plot to', os.path.join(parent, date_str + 'violin_plot.pdf'))
     #         except:

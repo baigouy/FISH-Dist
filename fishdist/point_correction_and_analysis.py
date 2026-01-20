@@ -10,32 +10,43 @@ from fishdist.spot_data_utils import compute_and_plot_points_for_all_dims
 
 # from gergor_tools_bioengeneering import compute_and_plot_points_for_all_dims
 
-def perform_correction(measured_points, reference_points, recenter=True):
+def perform_correction(source_points, target_points, recenter=True):
     """
-    Apply linear bias correction to 3D points based on a reference set.
+    Apply linear bias correction to 3D points by aligning one set of points to another.
 
-    This function computes per-axis slope deviations between `measured_points` and
-    `reference_points`, corrects the measured points, and optionally recenters them
-    to match the reference distribution.
+    This function performs a per-axis linear correction to reduce systematic
+    biases between two sets of corresponding 3D points obtained from the same image.
+    One set (`source_points`) is aligned to the other (`target_points`) using slope
+    correction and optional recentering.
+
+    The procedure is as follows:
+    1. Compute the difference between each point in `source_points` and the corresponding
+       point in `target_points`.
+    2. Subtract the mean difference to center the distribution at zero.
+    3. Fit a linear regression per axis to estimate scaling (slope) biases.
+    4. Adjust `source_points` using the per-axis slopes.
+    5. Optionally remove any residual global translation to recenter the corrected points.
 
     Args:
-        measured_points (np.ndarray of shape (N, 3)): The measured or distorted 3D centroid positions.
-        reference_points (np.ndarray of shape (N, 3)): The reference 3D centroid positions.
-        recenter (bool, optional): If True, subtracts residual translation to recenter corrected points. Default is True.
+        source_points (np.ndarray of shape (N, 3)): 3D coordinates of the points to be corrected.
+        target_points (np.ndarray of shape (N, 3)): 3D coordinates of the points used for alignment.
+        recenter (bool, optional): If True, subtracts residual translation to recenter
+            the corrected points. Default is True.
 
     Returns:
-        np.ndarray of shape (N, 3): Corrected 3D points after slope correction and optional recentering.
+        np.ndarray of shape (N, 3): Corrected 3D points after linear slope correction
+        and optional recentering.
 
     Example:
         ```python
         import numpy as np
 
-        measured = np.array([[1.0, 2.0, 3.0],
-                             [2.0, 3.0, 4.0]])
-        reference = np.array([[0.9, 2.1, 2.9],
-                              [2.1, 2.9, 4.1]])
+        source = np.array([[1.0, 2.0, 3.0],
+                           [2.0, 3.0, 4.0]])
+        target = np.array([[0.9, 2.1, 2.9],
+                           [2.1, 2.9, 4.1]])
 
-        corrected = perform_correction(measured, reference)
+        corrected = perform_correction(source, target)
         print(corrected)
         ```
     """
@@ -48,7 +59,7 @@ def perform_correction(measured_points, reference_points, recenter=True):
 
 
     # Difference between measured and reference points
-    diff = measured_points - reference_points
+    diff = source_points - target_points
 
     # Remove mean displacement before slope estimation
     mean_diff = np.mean(diff, axis=0)
@@ -58,56 +69,59 @@ def perform_correction(measured_points, reference_points, recenter=True):
     for dim in range(num_dimensions):
         model = LinearRegression()
         model.fit(
-            measured_points[:, dim].reshape(-1, 1),
+            source_points[:, dim].reshape(-1, 1),
             diff[:, dim].reshape(-1, 1)
         )
         slope = model.coef_[0][0]
         correction_matrix[dim, dim] = slope
 
     # Compute correction vector
-    correction_vector = np.dot(measured_points, correction_matrix)
+    correction_vector = np.dot(source_points, correction_matrix)
 
     # Apply the correction
-    corrected_points = measured_points - correction_vector
+    corrected_points = source_points - correction_vector
 
     # Optionally recenter
     if recenter:
-        residual_shift = np.mean(corrected_points - reference_points, axis=0)
+        residual_shift = np.mean(corrected_points - target_points, axis=0)
         corrected_points -= residual_shift
 
     return corrected_points
 
 
-def finalize_analysis_and_save_db(measured_points, corrected_spots, reference_points, tags, order=['x','y','z'], MASK=True):
+def finalize_analysis_and_save_db(source_points, corrected_spots, target_points, tags, order=['x','y','z'], MASK=True, output_filename=None):
     """
-    Compute distances between corrected and reference 3D points, save results per tag, and generate plots.
+      Compute distances between corrected points and a target set, save results, and generate plots.
 
-    This function groups points by `tags` (if MASK is True), calculates 3D distances between
-    corrected and reference points, stores the results in per-tag databases, and produces
-    dimension-wise plots.
+      This function performs a per-tag (or global) analysis of 3D points:
+      - Groups points by `tags` (if MASK=True).
+      - Computes 3D distances between `corrected_spots` and `target_points`.
+      - Saves per-tag results in a database with one row per point pair.
+      - Generates dimension-wise plots showing alignment before and after correction.
 
-    Args:
-        measured_points (np.ndarray of shape (N, 3)): Original measured spot coordinates.
-        corrected_spots (np.ndarray of shape (N, 3)): Corrected spot coordinates.
-        reference_points (np.ndarray of shape (N, 3)): Reference spot coordinates.
-        tags (np.ndarray of shape (N,)): Categorical labels used to group points.
-        order (list of str, optional): Dimension names for database columns. Default is ['x','y','z'].
-        MASK (bool, optional): If True, perform per-tag analysis; otherwise, process all points together. Default is True.
+      Args:
+          source_points (np.ndarray of shape (N, 3)): Original points before correction.
+          corrected_spots (np.ndarray of shape (N, 3)): Points after linear correction.
+          target_points (np.ndarray of shape (N, 3)): Target points used for alignment.
+          tags (np.ndarray of shape (N,)): Labels used to group points for per-tag analysis.
+          order (list of str, optional): Dimension names for database columns. Default is ['x','y','z'].
+          MASK (bool, optional): If True, perform per-tag analysis; otherwise, process all points together. Default is True.
+          output_filename (str, optional): Optional output filename for the database.
 
-    Returns:
-        None: Results are saved to databases and plots are generated; no value is returned.
+      Returns:
+          None: Results are saved to per-tag databases, and plots are generated; no values are returned.
 
-    Example:
-        ```python
-        import numpy as np
+      Example:
+          ```python
+          import numpy as np
 
-        measured = np.array([[1,2,3],[4,5,6]])
-        corrected = np.array([[1.1,2.0,2.9],[3.9,5.1,6.0]])
-        reference = np.array([[1.0,2.0,3.0],[4.0,5.0,6.0]])
-        tags = np.array(['A','B'])
+          source = np.array([[1,2,3],[4,5,6]])
+          corrected = np.array([[1.1,2.0,2.9],[3.9,5.1,6.0]])
+          target = np.array([[1.0,2.0,3.0],[4.0,5.0,6.0]])
+          tags = np.array(['A','B'])
 
-        finalize_analysis_and_save_db(measured, corrected, reference, tags)
-        ```
+          finalize_analysis_and_save_db(source, corrected, target, tags)
+          ```
     """
 
     if MASK:
@@ -125,19 +139,19 @@ def finalize_analysis_and_save_db(measured_points, corrected_spots, reference_po
             voxel_scale = get_voxel_conversion_factor(factor)
 
             # Compute distances between corrected and reference points
-            distances = distance_between_points(corrected_spots[tag_mask], reference_points[tag_mask],
+            distances = distance_between_points(corrected_spots[tag_mask], target_points[tag_mask],
                                                rescaling_factor=voxel_scale)
             distances = distances[..., np.newaxis]  # convert to column vector
 
             # Concatenate corrected points, reference points, and distances
-            data = np.concatenate((corrected_spots[tag_mask], reference_points[tag_mask], distances), axis=1)
+            data = np.concatenate((corrected_spots[tag_mask], target_points[tag_mask], distances), axis=1)
 
             # Save data to per-tag database
             db_name = smart_name_parser(factor, 'TA') + '/FISH.db'
-            table_name = "points_n_distances3D_only_in_nuclei_chromatic_aberrations_corrected_null_vector_method"
-            create_table_and_append_data(db_name, table_name, columns, data, temporary=False)
+            # table_name = "points_n_distances3D_only_in_nuclei_lcc"
+            create_table_and_append_data(db_name, output_filename, columns, data, temporary=False)
 
             # Generate plots for each dimension
-            compute_and_plot_points_for_all_dims(measured_points[tag_mask], corrected_spots[tag_mask],
-                                                 reference_points[tag_mask], rescaling_factor=voxel_scale)
+            compute_and_plot_points_for_all_dims(source_points[tag_mask], corrected_spots[tag_mask],
+                                                 target_points[tag_mask], rescaling_factor=voxel_scale)
 

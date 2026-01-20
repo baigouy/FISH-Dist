@@ -1,13 +1,17 @@
-# DO I REALLY NEED TO MAKE THIS CODE PUBLIC ???? --> I GUESS NOT
+# debug options: --root-path "/media/teamPrudhomme/EqpPrudhomme2/FISH_Dist_analysis"
+# debug options: --config /media/teamPrudhomme/EqpPrudhomme2/FISH_Dist_analysis/config.json
+
 
 import sys
 
 # sys.path.append('/home/aigouy/miniconda3/pkgs/cuda-nvcc-tools-12.4.131-h99ab3db_0/bin')
 # sys.path.append('/home/aigouy/miniconda3/bin')
 # sys.path.append('/home/aigouy/miniconda3/condabin')
-
+import json
 import os
 import tensorflow as tf
+
+html = 'https://github.com/baigouy/FISH-Dist'
 
 # import os
 # os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
@@ -23,8 +27,20 @@ from batoolset.utils.loadlist import loadlist
 from fishdist.fish_analysis_pipeline import \
     run_analysis
 import shutil
+import argparse
+
+
+
 
 print('really executing the script')
+
+def get_valid_folder(prompt):
+    """Prompt the user for a folder path and validate it exists."""
+    while True:
+        folder = input(prompt).strip()
+        if os.path.exists(folder) and os.path.isdir(folder):
+            return folder
+        print(f"Error: '{folder}' is not a valid directory. Please try again.")
 
 def move_to_DONE_when_DONE(lst, add_extras=False):
     """
@@ -72,67 +88,401 @@ def move_to_DONE_when_DONE(lst, add_extras=False):
             traceback.print_exc()
             # print error
 
+
+def print_folder_logic_with_values():
+    """Prints the folder structure and workflow logic with actual values."""
+    print("\n" + "=" * 60)
+    print("FOLDER STRUCTURE, WORKFLOW LOGIC, AND USAGE")
+    print("=" * 60)
+
+    logic = f"""
+
+For a step-by-step tutorial, refer to the online documentation:
+{html}
+    
+1. FOLDER STRUCTURE:
+
+FISH_Dist_analysis/
+├── colocs/          # For colocalization analysis and chromatic aberration correction computation
+├── controls/        # Stores chromatic aberration corrections from colocs/
+└── distances/       # For distance measurements between FISH spots
+
+2. WORKFLOW:
+- COLOCALIZATION ANALYSIS:
+  * Place images in 'colocs/' to generate chromatic aberration corrections
+  * Correction matrices must be saved in 'controls/' to be correct chromatic aberrations of distances
+
+- DISTANCE ANALYSIS:
+  * Place images in 'distances/' to measure FISH spot distances
+  * If chromatic aberration correction matrices (.npy) exist in 'controls/', they'll be applied to distances images 
+
+3. COMMAND LINE USAGE:
+
+You can run the analysis in several ways:
+
+A) Using a root path (recommended for most users):
+   python your_script.py --root-path "/media/teamPrudhomme/EqpPrudhomme2/FISH_Dist_analysis"
+
+B) Using a configuration file (JSON format, recommended for advanced users):
+   python your_script.py --config path/to/config.json
+
+Example config.json:
+{{
+    "root_path": "/media/teamPrudhomme/EqpPrudhomme2/FISH_Dist_analysis",
+    "reference_channel": 1,
+    "second_spot_channel": [2, 3],
+    "pairing_threshold": 30,
+    "area_threshold": null,
+    "run_seg": true,
+    "run_distance_measurement": true,
+    "run_ctrls": true,
+    "run_gaussian_fit": true,
+    "nuclear_model_to_use": "/path/to/nuclear_model",
+    "spot_model_to_use": "/path/to/spot_model"
+}}
+
+For a step-by-step tutorial, refer to the online documentation:
+{html}
+
+"""
+
+    print(logic)
+    print("="*60 + "\n")
+
+def print_current_analysis(
+    nucleus_channel,
+    reference_channel,
+    folders,
+    controls_path,
+    second_spot_channel=None,
+    run_gaussian_fit=False,
+    nuclear_model_to_use=None,
+    spot_model_to_use=None
+):
+    logic = f"""
+CURRENT ANALYSIS:
+- Nucleus channel: {nucleus_channel}
+- Reference channel: {reference_channel}
+- Second spot channel(s): {second_spot_channel}
+- Scanning folders: {', '.join(folders)}
+- Using registration files from: {controls_path}
+- Processing images: *.czi files in the specified folders
+- Results will be moved to 'DONE/' subfolders
+- Run Gaussian fit: {run_gaussian_fit}
+- Nuclear model: {nuclear_model_to_use}
+- Spot model: {spot_model_to_use}
+"""
+    print(logic)
+    print("="*60 + "\n")
+
+def get_channel_indices():
+    """Prompt the user for channel indices with default values."""
+    try:
+        first_spot_channel = int(input("Enter the index of the first FISH channel (default: 1): ") or 1)
+        second_spot_channel = int(input("Enter the index of the second FISH channel (default: 2): ") or 2)
+        return first_spot_channel, second_spot_channel
+    except ValueError:
+        print("Invalid input. Using default values.")
+        return 1, 2
+
+def parse_arguments():
+    """Parse command line arguments with all required options."""
+    parser = argparse.ArgumentParser(
+        description="FISH-Dist: Automated 3D Distance Quantification for Confocal FISH Images",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+
+    # -------------------------
+    # Path arguments
+    # -------------------------
+    path_group = parser.add_mutually_exclusive_group()
+    path_group.add_argument(
+        "--root-path",
+        type=str,
+        help="Root path containing 'colocs/', 'controls/', and 'distances/' subfolders"
+    )
+    path_group.add_argument(
+        "--colocs-path",
+        type=str,
+        help="Path to the colocs folder"
+    )
+
+    parser.add_argument(
+        "--controls-path",
+        type=str,
+        help="Path to the controls folder (required if using --colocs-path)"
+    )
+
+    parser.add_argument(
+        "--distances-path",
+        type=str,
+        help="Path to the distances folder (required if using --colocs-path)"
+    )
+
+    # -------------------------
+    # Channel arguments
+    # -------------------------
+    parser.add_argument(
+        "--nucleus-channel",
+        type=int,
+        default=0,
+        help="Index of the nucleus channel"
+    )
+
+    parser.add_argument(
+        "--reference-channel",
+        type=int,
+        default=1,
+        help="Index of the reference FISH channel for registration"
+    )
+
+    parser.add_argument(
+        "--second-spot-channel",
+        type=int,
+        # nargs="*",
+        default=2,
+        help="Indices of second spot channels comma separated if more than 1 (default 2)"
+    )
+
+    # -------------------------
+    # Configuration
+    # -------------------------
+    parser.add_argument(
+        "--config",
+        type=str,
+        help="Path to a JSON configuration file with all settings"
+    )
+
+    # -------------------------
+    # Analysis parameters
+    # -------------------------
+    parser.add_argument(
+        "--pairing-threshold",
+        type=int,
+        default=30,
+        help="Threshold (nm) for pairing spots between channels" # TODO --> FIX THAT --> it is not in nm, it is in micrometer and this nb is scaled later by the pixel size which makes no sense
+    )
+
+    parser.add_argument(
+        "--area-threshold",
+        type=float,
+        default=None,
+        help="Area threshold for segmentation"
+    )
+
+    # -------------------------
+    # Pipeline steps (ALL ENABLED BY DEFAULT)
+    # -------------------------
+    parser.add_argument(
+        "--no-seg",
+        dest="run_seg",
+        action="store_false",
+        help="Disable segmentation"
+    )
+    parser.set_defaults(run_seg=True)
+
+    parser.add_argument(
+        "--no-distance-measurements",
+        dest="run_distance_measurements",
+        action="store_false",
+        help="Disable distance measurements"
+    )
+    parser.set_defaults(run_distance_measurements=True)
+
+    parser.add_argument(
+        "--no-ctrls",
+        dest="run_ctrls",
+        action="store_false",
+        help="Disable controls"
+    )
+    parser.set_defaults(run_ctrls=True)
+
+    parser.add_argument(
+        "--no-gaussian-fit",
+        dest="run_gaussian_fit",
+        action="store_false",
+        help="Disable Gaussian fitting"
+    )
+    parser.set_defaults(run_gaussian_fit=True)
+
+    # -------------------------
+    # Models
+    # -------------------------
+    parser.add_argument(
+        "--nuclear-model-to-use",
+        type=str,
+        default="nuclear_model_0",
+        help="Nuclear model to use"
+    )
+
+    parser.add_argument(
+        "--spot-model-to-use",
+        type=str,
+        default="spot_model_0",
+        help="Spot detection model to use"
+    )
+
+    args = parser.parse_args()
+
+    # -------------------------
+    # Conditional requirement: if no config, require a path
+    # -------------------------
+    if not args.config and not (args.root_path or args.colocs_path):
+        parser.error("one of the arguments --root-path or --colocs-path is required if --config is not provided")
+
+    # If --colocs-path is used, require controls and distances paths
+    if args.colocs_path and (not args.controls_path or not args.distances_path):
+        parser.error("--controls-path and --distances-path are required when using --colocs-path")
+
+    return args
+
+def load_config(config_path):
+    """Load configuration from a JSON file."""
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(f"Configuration file not found: {config_path}")
+
+    with open(config_path, 'r') as f:
+        config = json.load(f)
+
+    return config
+
+def validate_paths(args):
+    """Validate and set up the paths based on user input."""
+    if args.config:
+        # If using config file, paths should be set there
+        return
+
+    if args.root_path:
+        # If root path is provided, construct subfolder paths
+        args.colocs_path = os.path.join(args.root_path, 'colocs')
+        args.controls_path = os.path.join(args.root_path, 'controls')
+        args.distances_path = os.path.join(args.root_path, 'distances')
+    else:
+        # If individual paths are provided, verify they exist
+        if not os.path.exists(args.colocs_path):
+            raise ValueError(f"Colocs path does not exist: {args.colocs_path}")
+        if not os.path.exists(args.controls_path):
+            raise ValueError(f"Controls path does not exist: {args.controls_path}")
+        if not os.path.exists(args.distances_path):
+            raise ValueError(f"Distances path does not exist: {args.distances_path}")
+
+def merge_args_with_config(args):
+    """Merge command line arguments with configuration file settings."""
+    if args.config:
+        try:
+            config = load_config(args.config)
+
+            # Override arguments with config file values if they exist
+            if 'nucleus_channel' in config:
+                args.nucleus_channel = config['nucleus_channel']
+            if 'reference_channel' in config:
+                args.reference_channel = config['reference_channel']
+            if 'second_spot_channel' in config:
+                args.second_spot_channel = config['second_spot_channel']
+            if 'pairing_threshold' in config:
+                args.pairing_threshold = config['pairing_threshold']
+            if 'area_threshold' in config:
+                args.area_threshold = config['area_threshold']
+            if 'run_seg' in config:
+                args.run_seg = config['run_seg']
+            if 'run_distance_measurements' in config:
+                args.run_distance_measurements = config['run_distance_measurements']
+            if 'run_ctrls' in config:
+                args.run_ctrls = config['run_ctrls']
+            if 'run_gaussian_fit' in config:
+                args.run_gaussian_fit = config['run_gaussian_fit']
+            if 'nuclear_model_to_use' in config:
+                args.nuclear_model_to_use = config['nuclear_model_to_use']
+            if 'spot_model_to_use' in config:
+                args.spot_model_to_use = config['spot_model_to_use']
+
+            # Handle paths from config
+            if 'root_path' in config:
+                args.root_path = config['root_path']
+                validate_paths(args)
+            else:
+                if 'colocs_path' in config:
+                    args.colocs_path = config['colocs_path']
+                if 'controls_path' in config:
+                    args.controls_path = config['controls_path']
+                if 'distances_path' in config:
+                    args.distances_path = config['distances_path']
+                validate_paths(args)
+
+        except Exception as e:
+            print(f"Warning: Could not load config file: {e}")
+            sys.exit(1)
+
+    return args
+
+
 if __name__ == '__main__':
+    print_folder_logic_with_values()
+    args = parse_arguments()
+    args = merge_args_with_config(args)
+    validate_paths(args)
 
-    if True:
-        # probably useless but keep ---> CAN ADD sudo /home/aigouy/remount_samba.sh as an application au démarrage et si ajouté au sudoers alors ça peut marcher --> cool!!!
-        if not os.path.exists('/media/teamPrudhomme/EqpPrudhomme2/'):
-            try:
-                os.system('sudo /home/aigouy/remount_samba.sh')  # opens and closes internet connection --> just a bug fix to be sure everything is ok
-            except:
-                traceback.print_exc()
+    # Prepare folders_to_scan based on the arguments
+    if hasattr(args, 'root_path'):
+        folders_to_scan = [
+            os.path.join(args.root_path, 'colocs'),
+            os.path.join(args.root_path, 'distances')
+        ]
+        controls_path = os.path.join(args.root_path, 'controls')
+    else:
+        folders_to_scan = [args.colocs_path, args.distances_path]
+        controls_path = args.controls_path
 
-        if not os.path.exists('/media/teamPrudhomme/EqpPrudhomme2/'):
-            print('Could not connect to the fileserver --> quitting')
-            sys.exit(0)
+    print_current_analysis(
+        nucleus_channel=args.nucleus_channel,
+        reference_channel=args.reference_channel,
+        folders=folders_to_scan,
+        controls_path=controls_path,
+        run_gaussian_fit=args.run_gaussian_fit,
+        nuclear_model_to_use=args.nuclear_model_to_use,
+        spot_model_to_use=args.spot_model_to_use
+    )
 
+    print('folders_to_scan, controls_path', folders_to_scan, controls_path)
 
-    # folders_to_scan = ['/media/teamPrudhomme/EqpPrudhomme2/To be analyzed/2048', '/media/teamPrudhomme/EqpPrudhomme2/To be analyzed/3072', '/media/teamPrudhomme/EqpPrudhomme2/To be analyzed/colocs/2048', '/media/teamPrudhomme/EqpPrudhomme2/To be analyzed/colocs/3072']
-    folders_to_scan = ['/media/teamPrudhomme/EqpPrudhomme2/To be analyzed/2048', '/media/teamPrudhomme/EqpPrudhomme2/To be analyzed/3072', '/media/teamPrudhomme/EqpPrudhomme2/To be analyzed/colocs/2048', '/media/teamPrudhomme/EqpPrudhomme2/To be analyzed/colocs/3072']
-    # folders_to_scan = ['/media/teamPrudhomme/EqpPrudhomme2/To be analyzed/tst_benoit_2048','/media/teamPrudhomme/EqpPrudhomme2/To be analyzed/2048', '/media/teamPrudhomme/EqpPrudhomme2/To be analyzed/3072', '/media/teamPrudhomme/EqpPrudhomme2/To be analyzed/colocs/2048', '/media/teamPrudhomme/EqpPrudhomme2/To be analyzed/colocs/3072']
-    # folders_to_scan = ['/media/teamPrudhomme/EqpPrudhomme2/To be analyzed/3072']
+    # Print configuration
+    print("\nAnalysis Configuration:")
+    print(f"- Nucleus channel: {args.nucleus_channel}")
+    print(f"- Reference FISH channel: {args.reference_channel}")
+    print(f"- Second spot channel(s): {args.second_spot_channel}")
+    print(f"- Pairing threshold: {args.pairing_threshold} nm")
+    print(f"- Area threshold: {args.area_threshold}")
+    print(f"- Run segmentation: {args.run_seg}")
+    print(f"- Run distance measurements: {args.run_distance_measurements}")
+    print(f"- Run controls: {args.run_ctrls}")
+    print(f"- Run Gaussian fit: {args.run_gaussian_fit}")
+    print(f"- Nuclear model: {args.nuclear_model_to_use}")
+    print(f"- Spot model: {args.spot_model_to_use}")
+
+    # Prepare paths for analysis
+    if hasattr(args, 'root_path'):
+        folders_to_scan = [
+            os.path.join(args.root_path, 'colocs'),
+            os.path.join(args.root_path, 'distances')
+        ]
+    else:
+        folders_to_scan = [args.colocs_path, args.distances_path]
+
+    first_spot_channel = args.reference_channel
+    second_spot_channel = args.second_spot_channel
+
+    if not folders_to_scan:
+        print("No valid folders provided. Exiting.")
+        sys.exit(0)
 
     for folder in folders_to_scan:
-        # use files in a specific folder for registration
-        if folder.replace('/','').endswith('2048'):
-            # please stick to that from now on
-            # or allow for tiff support ????
-            # UNFORTUNATELY MANUE CHANGED AGAIN THE ORDER OF THE CHANNELS WHICH CREATES HUGE COMPAT PROBLEMS --> AND IS LIKELY TO CAUSE UNPRECENTED ISSUES
-            first_spot_channel = -2 # DIRTY FIX FOR MANUE CHANGE
-            second_spot_channel = -1
-            DEFAULT_PATH_2048='/E/Sample_images/FISH/Sample_transcription_dot_detection/manue_manually_segmented_images/training_set/tests/full_real_analysis_tst1/Coloc X2 2048/*.czi'
-            list_pairs_for_reg = loadlist(DEFAULT_PATH_2048)  # for 2048x2048 images
-            NEW_PATH = '/media/teamPrudhomme/EqpPrudhomme2/To be analyzed/controls/2048/*.czi'
-            controls = loadlist(NEW_PATH)
-            if controls: # if there are files in the controls -> use them for registration, if not use the defaut files
-                list_pairs_for_reg=controls
-                print(('PATH USED FOR REGISTRATION', NEW_PATH))
-            else:
-                print(('PATH USED FOR REGISTRATION', DEFAULT_PATH_2048))
-        else:
-            # UNFORTUNATELY MANUE CHANGED AGAIN THE ORDER OF THE CHANNELS WHICH CREATES HUGE COMPAT PROBLEMS --> AND IS LIKELY TO CAUSE UNPRECENTED ISSUES
-            first_spot_channel = 1
-            second_spot_channel = -1 # order of the channels in /E/Sample_images/FISH/Sample_transcription_dot_detection/manue_manually_segmented_images/training_set/tests/full_real_analysis_tst1/Benoit R1 R6
-
-            DEFAULT_PATH_3072 = '/E/Sample_images/FISH/Sample_transcription_dot_detection/manue_manually_segmented_images/training_set/tests/full_real_analysis_tst1/Benoit colocalisation on pupal wingsColocalisation_not_blurred/*.czi'
-            list_pairs_for_reg = loadlist(DEFAULT_PATH_3072) # for 3072 px images
-            NEW_PATH = '/media/teamPrudhomme/EqpPrudhomme2/To be analyzed/controls/3072/*.czi'
-            controls = loadlist(NEW_PATH)
-            if controls: # if there are files in the controls -> use them for registration
-                list_pairs_for_reg=controls
-                print(('PATH USED FOR REGISTRATION', NEW_PATH))
-            else:
-                print(('PATH USED FOR REGISTRATION',DEFAULT_PATH_3072))
-
-        paths = loadlist(folder+'/*.czi')
-
+        paths = loadlist(folder + '/*.czi')
         if not paths:
-            print('no images found --> nothing todo')
-            # import sys
-            # sys.exit(0)
+            print('No images found --> nothing to do')
             continue
 
-        # get the logic and finalize
+        list_pairs_for_reg = loadlist(controls_path + '/*.czi')
+
         RUN_REG = False
         if 'colocs' in folder:
             list_pairs_for_reg = paths
@@ -141,19 +491,33 @@ if __name__ == '__main__':
 
         print('paths', paths)
 
-        PAIRING_THRESHOLD = 30 # 30 # 60 # --> 4µm 30 #--> 2µm # 250 #--> initial size   # tested for Sarah 60 30 15
-        correction_matrix_save_path = smart_name_parser(list_pairs_for_reg[0], 'parent')
+        PAIRING_THRESHOLD = args.pairing_threshold
+        if list_pairs_for_reg:
+            correction_matrix_save_path = smart_name_parser(list_pairs_for_reg[0], 'parent') # TODO is this stuff really needed -−> I guess not
+        else:
+            correction_matrix_save_path = controls_path
+        RUN_SEG = args.run_seg
+        RUN_DISTANCE_MEASUREMENTS = args.run_distance_measurements
+        RUN_CTRLS = args.run_ctrls
+        RUN_GAUSSIAN_FIT = args.run_gaussian_fit
+        area_threshold = args.area_threshold
 
-        area_threshold = None # 35 for sarah (before) # None for Manue
-        RUN_SEG = True
-        RUN_DISTANCE_MEASUREMENTS = True
-        RUN_CTRLS = True
-
-        run_analysis(paths, correction_matrix_save_path=correction_matrix_save_path,
-                     PAIRING_THRESHOLD=PAIRING_THRESHOLD, area_threshold=area_threshold, RUN_SEG=RUN_SEG,
-                     RUN_REG=RUN_REG, RUN_DISTANCE_MEASUREMENTS=RUN_DISTANCE_MEASUREMENTS, RUN_CTRLS=RUN_CTRLS,list_pairs_for_reg=list_pairs_for_reg,
-                     first_spot_channel = first_spot_channel,second_spot_channel = second_spot_channel # dirty bug fix for manue change of order of channels (need be extremely careful from now on...)
-                     )
+        run_analysis(
+            paths,
+            correction_matrix_save_path=correction_matrix_save_path,
+            PAIRING_THRESHOLD=PAIRING_THRESHOLD,
+            area_threshold=area_threshold,
+            RUN_SEG=RUN_SEG,
+            RUN_REG=RUN_REG,
+            RUN_DISTANCE_MEASUREMENTS=RUN_DISTANCE_MEASUREMENTS,
+            RUN_CTRLS=RUN_CTRLS,
+            RUN_GAUSSIAN_FIT=RUN_GAUSSIAN_FIT,
+            list_pairs_for_reg=list_pairs_for_reg,
+            first_spot_channel=first_spot_channel,
+            second_spot_channel=second_spot_channel,
+            nuclear_model_to_use=args.nuclear_model_to_use,
+            spot_model_to_use=args.spot_model_to_use
+        )
 
         move_to_DONE_when_DONE(paths, add_extras=True)
 
