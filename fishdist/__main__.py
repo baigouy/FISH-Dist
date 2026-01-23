@@ -76,7 +76,7 @@ if __name__ == '__main__':
         sys.exit(0)
 
     for folder in folders_to_scan:
-        paths = loadlist(folder + '/*.czi')
+        paths = loadlist(folder + '/*.czi')+loadlist(folder + '/*.tif') # TODO support for czi or tifs, shall I add more ? maybe ok for now
         if not paths:
             print('No images found --> nothing to do')
             continue
