@@ -9,12 +9,8 @@ import os
 import sys
 from fishdist.fish_analysis_pipeline import run_analysis
 
-
 # from epyseg.epygui import EPySeg
-
-
 # def run_FISH_dist():
-
 
 if __name__ == '__main__':
     print_folder_logic_with_values()

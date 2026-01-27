@@ -19,10 +19,5 @@ plugins:
 nav:
   - FISH-Dist: index.md
   - Advanced settings (configuration file): CONFIGURATION.md
-#  - pyTA: TA/README.md
-#  - tutorials.md
-#  - How-To Guides: how-to-guides.md
+  - Quick Demo (Tutorial): demo.md
   - API.md
-#  - explanation.md
-  
-

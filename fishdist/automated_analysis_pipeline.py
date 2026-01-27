@@ -11,7 +11,7 @@ html = 'https://github.com/baigouy/FISH-Dist'
 
 # import os
 # os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-# os.environ["CUDA_VISIBLE_DEVICES"] = ""
+# os.environ["CUDA_VISIBLE_DEVcICES"] = ""
 
 print('entered the script')
 print('__file__',__file__)
@@ -24,7 +24,6 @@ from fishdist.fish_analysis_pipeline import \
     run_analysis
 import shutil
 import argparse
-
 
 
 

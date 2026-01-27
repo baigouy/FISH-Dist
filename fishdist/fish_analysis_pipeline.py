@@ -290,11 +290,10 @@ def apply_affine_transform_to_all_images(
 
     # TODO --> maybe deactivate this !!! -> probably yes but ok for debug --> this is just for backwards compat
     if not os.path.exists(path_to_affine):
-        try:
-            path_to_affine = os.path.join(root_folder_path_to_affine_trafo_matrix,'acc.npy')
-        except:
-            path_to_affine=os.path.join(root_folder_path_to_affine_trafo_matrix,'affine_chromatic_aberration_correction.npy')
-
+        path_to_affine = os.path.join(root_folder_path_to_affine_trafo_matrix,'acc.npy')
+        if not os.path.exists(path_to_affine):
+            path_to_affine = os.path.join(root_folder_path_to_affine_trafo_matrix,
+                                          'affine_chromatic_aberration_correction.npy')
 
     path_to_voxel = os.path.join(root_folder_path_to_affine_trafo_matrix, 'voxel_size.npy') # there is only one voxel size file so this does not make sense
 
