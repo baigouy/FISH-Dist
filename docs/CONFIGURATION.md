@@ -4,20 +4,20 @@ FISH-Dist can be configured via a **JSON configuration file** instead of providi
 
 ### JSON Structure
 
-| Key/Parameters              | Type | Description                                                                                    | Default / Required                            |
-|-----------------------------|------|------------------------------------------------------------------------------------------------|-----------------------------------------------|
-| `root_path`                 | string | Root folder containing `colocs/`, `controls/`, and `distances/`                                | Required if not specifying paths individually |
-| `nucleus_channel`           | int | Index of the nuclear channel in your images                                                    | 0                                             |
-| `reference_channel`         | int | Index of the FISH channel used as reference for chromatic aberration correction                | 1                                             |
+| Key/Parameters              | Type               | Description                                                                                    | Default / Required                            |
+|-----------------------------|--------------------|------------------------------------------------------------------------------------------------|-----------------------------------------------|
+| `root_path`                 | string             | Root folder containing `colocs/`, `controls/`, and `distances/`                                | Required if not specifying paths individually |
+| `nucleus_channel`           | int                | Index of the nuclear channel in your images                                                    | 0                                             |
+| `reference_channel`         | int                | Index of the FISH channel used as reference for chromatic aberration correction                | 1                                             |
 | `second_spot_channel`       | int or list of int | Index/indices of the other FISH channels to pair with the reference                            | 2                                             |
-| `pairing_threshold`         | int | Maximum distance (µm) to pair spots across channels                                            | 2.5                                          |
-| `area_threshold`            | float | Minimum area in px for detected objects in segmentation (optional)                             | null                                          |
-| `run_seg`                   | bool | Run segmentation step                                                                          | true                                          |
-| `run_gaussian_fit`          | bool | Run 3D Gaussian fitting for sub-pixel localization                                             | true                                          |
-| `run_distance_measurements` | bool | Run distance measurements                                                                      | true                                          |
-| `run_ctrls`                 | bool | Creates a set of images that allows for visual inspection of segmentation, pairs and distances | true                                          |
-| `nuclear_model_to_use`      | string | Path to a custom nuclear segmentation model (tensorflow)                                       | `"nuclear_model_0"`                           |
-| `spot_model_to_use`         | string | Path to a custom spot detection model (tensorflow)                                             | `"spot_model_0"`                              |
+| `pairing_threshold`         | float              | Maximum distance (µm) to pair spots across channels                                            | 2.5                                          |
+| `area_threshold`            | float              | Minimum area in px for detected objects in segmentation (optional)                             | null                                          |
+| `run_seg`                   | bool               | Run segmentation step                                                                          | true                                          |
+| `run_gaussian_fit`          | bool               | Run 3D Gaussian fitting for sub-pixel localization                                             | true                                          |
+| `run_distance_measurements` | bool               | Run distance measurements                                                                      | true                                          |
+| `run_ctrls`                 | bool               | Creates a set of images that allows for visual inspection of segmentation, pairs and distances | true                                          |
+| `nuclear_model_to_use`      | string             | Path to a custom nuclear segmentation model (tensorflow)                                       | `"nuclear_model_0"`                           |
+| `spot_model_to_use`         | string             | Path to a custom spot detection model (tensorflow)                                             | `"spot_model_0"`                              |
 
 ### Example `config.json`  Files
 
