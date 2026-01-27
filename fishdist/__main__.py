@@ -102,8 +102,8 @@ if __name__ == '__main__':
         run_analysis(
             paths,
             correction_matrix_save_path=correction_matrix_save_path,
-            PAIRING_THRESHOLD=PAIRING_THRESHOLD,
-            area_threshold=area_threshold,
+            PAIRING_THRESHOLD=PAIRING_THRESHOLD, # TODO check and use this parameter or ignore
+            area_threshold=area_threshold, # TODO check and use this parameter or ignore
             RUN_SEG=RUN_SEG,
             RUN_REG=RUN_REG,
             RUN_DISTANCE_MEASUREMENTS=RUN_DISTANCE_MEASUREMENTS,

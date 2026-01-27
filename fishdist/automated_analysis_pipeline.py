@@ -29,6 +29,17 @@ import argparse
 
 print('really executing the script')
 
+DEFAULT_CONFIG_NAME = "config.json"
+
+
+def find_config_in_root(root_path):
+    if root_path is None:
+        return None
+
+    candidate = os.path.join(root_path, DEFAULT_CONFIG_NAME)
+    return candidate if os.path.isfile(candidate) else None
+
+
 def get_valid_folder(prompt):
     """Prompt the user for a folder path and validate it exists."""
     while True:
@@ -214,6 +225,9 @@ def parse_arguments():
         help="Path to the distances folder (required if using --colocs-path)"
     )
 
+    # TODO add an override in case there is a config.json file in the root folder
+
+
     # -------------------------
     # Channel arguments
     # -------------------------
@@ -253,9 +267,9 @@ def parse_arguments():
     # -------------------------
     parser.add_argument(
         "--pairing-threshold",
-        type=int,
-        default=30,
-        help="Threshold (nm) for pairing spots between channels" # TODO --> FIX THAT --> it is not in nm, it is in micrometer and this nb is scaled later by the pixel size which makes no sense
+        type=float,
+        default=2.5, # in µm
+        help="Threshold (µm) for pairing spots between channels" # TODO --> FIX THAT --> it is not in nm, it is in micrometer and this nb is scaled later by the pixel size which makes no sense
     )
 
     parser.add_argument(
@@ -328,6 +342,12 @@ def parse_arguments():
     # If --colocs-path is used, require controls and distances paths
     if args.colocs_path and (not args.controls_path or not args.distances_path):
         parser.error("--controls-path and --distances-path are required when using --colocs-path")
+
+    # Auto-detect config.json in root-path if --config not provided
+    if not args.config and args.root_path:
+        auto_config = find_config_in_root(args.root_path)
+        if auto_config:
+            args.config = auto_config
 
     return args
 
@@ -410,7 +430,5 @@ def merge_args_with_config(args):
 
     return args
 
-
 if __name__ == '__main__':
     pass
-

@@ -26,7 +26,6 @@ def pair_points_by_distance(points1, points2, threshold=3, rescaling_factor=None
 
     """
 
-
     point_pairs = {}
     point_pairs_distances = {}
 

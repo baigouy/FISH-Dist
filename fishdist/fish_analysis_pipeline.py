@@ -1089,42 +1089,54 @@ def finalize_quantifications_n_pairing(
         # Pairing step
         # ----------------------------------------------------------------------
         # Convert threshold to µm if applicable
-        if not PAIR_MINIMIZING_PIXEL_DISTANCE:
-            threshold = (
-                PAIRING_THRESHOLD
-                if voxel_conversion_factor is None
-                else PAIRING_THRESHOLD * voxel_conversion_factor[1]
-            )
+        # if not PAIR_MINIMIZING_PIXEL_DISTANCE:
+        #     threshold = (
+        #         PAIRING_THRESHOLD
+        #         if voxel_conversion_factor is None
+        #         else PAIRING_THRESHOLD # * voxel_conversion_factor[1]
+        #     )
+        #
+        #     paired = pair_points_by_distance(
+        #         spots_ch1,
+        #         spots_ch2,
+        #         threshold=threshold,
+        #         rescaling_factor=voxel_conversion_factor
+        #     )
+        # else:
+        #     paired = pair_points_by_distance(
+        #         spots_ch1,
+        #         spots_ch2,
+        #         threshold=PAIRING_THRESHOLD
+        #     )
 
-            paired = pair_points_by_distance(
+        paired = pair_points_by_distance( # TODO check but should be ok
                 spots_ch1,
                 spots_ch2,
-                threshold=threshold,
-                rescaling_factor=voxel_conversion_factor
-            )
-        else:
-            paired = pair_points_by_distance(
-                spots_ch1,
-                spots_ch2,
-                threshold=PAIRING_THRESHOLD
+                threshold=PAIRING_THRESHOLD,
+                rescaling_factor= voxel_conversion_factor if not PAIR_MINIMIZING_PIXEL_DISTANCE else None,
             )
 
         try:
             # ----------------------------------------------------------------------
             # Compute pairwise distances
             # ----------------------------------------------------------------------
-            if not PAIR_MINIMIZING_PIXEL_DISTANCE:
-                distances = compute_pairwise_distance(
-                    list(paired.keys()),
-                    list(paired.values()),
-                    rescaling_factor=None
-                )
-            else:
-                distances = compute_pairwise_distance(
-                    list(paired.keys()),
-                    list(paired.values()),
-                    rescaling_factor=voxel_conversion_factor
-                )
+            # if not PAIR_MINIMIZING_PIXEL_DISTANCE:
+            #     distances = compute_pairwise_distance(
+            #         list(paired.keys()),
+            #         list(paired.values()),
+            #         rescaling_factor=None
+            #     )
+            # else:
+            #     distances = compute_pairwise_distance(
+            #         list(paired.keys()),
+            #         list(paired.values()),
+            #         rescaling_factor=voxel_conversion_factor
+            #     )
+            distances = compute_pairwise_distance(
+                list(paired.keys()),
+                list(paired.values()),
+                rescaling_factor=None if not PAIR_MINIMIZING_PIXEL_DISTANCE else voxel_conversion_factor
+            )
 
             median = np.median(distances)
             q1_q3 = get_q1_q3(distances)
@@ -1172,8 +1184,8 @@ def finalize_quantifications_n_pairing(
                 median=median,
                 q1_q3=q1_q3,
                 title=f'Pairing distance between ch{first_spot_channel} and ch{ch2} in {unit} (threshold: ' +
-                      str(PAIRING_THRESHOLD if voxel_conversion_factor is None
-                          else PAIRING_THRESHOLD * voxel_conversion_factor[1]) + ')'
+                      str(PAIRING_THRESHOLD+'px' if voxel_conversion_factor is None
+                          else PAIRING_THRESHOLD) + ')'
             )
 
             # Save histogram with channel numbers in filename
@@ -1910,7 +1922,7 @@ def pair_spots(paths, PAIRING_THRESHOLD=250, first_spot_channel=1, second_spot_c
 
     Args:
         paths (list[str]): List of file paths or dataset identifiers to process.
-        PAIRING_THRESHOLD (float, optional): Maximum distance (in voxel units or
+        PAIRING_THRESHOLD (float, optional): Maximum distance (in µm or
             scaled units) allowed for pairing spots. Defaults to 250.
         first_spot_channel (int, optional): Channel index for the reference spot channel.
             Defaults to 1.
@@ -2058,8 +2070,6 @@ def do_controls_for_easy_check(paths, ch1=1, ch2=2, ch_nuclei=0):
             smart_name_parser(path, f'control_max_proj_ch{ch1}_ch{ch2}.tif')
         )
         del max_proj
-
-
 
 def run_analysis(
     paths,
