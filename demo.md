@@ -86,7 +86,7 @@ After copying, the directory should look like:
 FISH_Dist_analysis/
 └── colocs/
     ├── coloc_1.tif
-    ├── coloc_2.tif
+    └── coloc_2.tif
 ```
 
 These images contain:
