@@ -137,7 +137,7 @@ Example config.json:
     "root_path": "/media/teamPrudhomme/EqpPrudhomme2/FISH_Dist_analysis",
     "reference_channel": 1,
     "second_spot_channel": [2, 3],
-    "pairing_threshold": 30,
+    "pairing_threshold": 2.5,
     "area_threshold": null,
     "run_seg": true,
     "run_distance_measurement": true,

@@ -46,7 +46,7 @@ if __name__ == '__main__':
     print(f"- Nucleus channel: {args.nucleus_channel}")
     print(f"- Reference FISH channel: {args.reference_channel}")
     print(f"- Second spot channel(s): {args.second_spot_channel}")
-    print(f"- Pairing threshold: {args.pairing_threshold} nm")
+    print(f"- Pairing threshold: {args.pairing_threshold} µm")
     print(f"- Area threshold: {args.area_threshold}")
     print(f"- Run segmentation: {args.run_seg}")
     print(f"- Run distance measurements: {args.run_distance_measurements}")
