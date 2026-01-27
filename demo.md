@@ -4,9 +4,7 @@ This tutorial walks through a complete FISH-Dist analysis using provided demo da
 You will learn how to:
 
 1. Perform chromatic aberration correction  
-   (see [Step 1 — Chromatic aberration correction](README.md#step-1--chromatic-aberration-correction))
 2. Measure distances between genomic loci  
-   (see [Step 2 — Distance Measurement](README.md#step-2--distance-measurement))
 
 This demo focuses on running the pipeline on example datasets; installation, setup, and general workflow details are described in the main [README.md](README.md).
 
@@ -16,8 +14,8 @@ This demo focuses on running the pipeline on example datasets; installation, set
 
 ### Requirements
 
-* Conda installed
-* FISH-Dist environment available created
+* Conda installed see [Install Conda](https://fish-dist.readthedocs.io/en/latest/#install-conda)
+* FISH-Dist environment available created see [Installation / Setup (one-time)](https://fish-dist.readthedocs.io/en/latest/#installation-setup-one-time)
 
 ---
 
