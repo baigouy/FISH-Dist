@@ -2,7 +2,7 @@ import setuptools
 
 __MAJOR__ = 0
 __MINOR__ = 0
-__MICRO__ = 9
+__MICRO__ = 96
 __RELEASE__ = ''  # a #b  # https://www.python.org/dev/peps/pep-0440/#public-version-identifiers --> alpha beta, ...
 __VERSION__ = ''.join([str(__MAJOR__), '.', str(__MINOR__), '.', str(__MICRO__)])
 __DESCRIPTION__ = """A comprehensive Python pipeline for detecting, quantifying, and analyzing FISH (Fluorescence In Situ Hybridization) spots in 3D microscopy images using deep learning and chromatic aberration correction."""
