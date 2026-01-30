@@ -69,7 +69,7 @@ colocs.zip
 
 From:
 
-[https://gitlab.com/baigouy/models/-/raw/master/coloc.zip](https://gitlab.com/baigouy/models/-/raw/master/coloc.zip)
+[https://gitlab.com/baigouy/models/-/raw/e28042a861ac2c9ddef0ba870ceac12eb8a5e9ff/colocs.zip](https://gitlab.com/baigouy/models/-/raw/e28042a861ac2c9ddef0ba870ceac12eb8a5e9ff/colocs.zip)
 
 [//]: # ([https://filedn.eu/lP1mui2ztv7VO2qrPEt28Vf/colocs.zip]&#40;https://filedn.eu/lP1mui2ztv7VO2qrPEt28Vf/colocs.zip&#41;)
 
@@ -150,11 +150,10 @@ distances.zip
 
 From:
 
-[https://gitlab.com/baigouy/models/-/raw/master/controls.zip](https://gitlab.com/baigouy/models/-/raw/master/controls.zip)
-[https://gitlab.com/baigouy/models/-/raw/master/distances.zip](https://gitlab.com/baigouy/models/-/raw/master/distances.zip)
+[https://gitlab.com/baigouy/models/-/raw/e28042a861ac2c9ddef0ba870ceac12eb8a5e9ff/controls.zip](https://gitlab.com/baigouy/models/-/raw/e28042a861ac2c9ddef0ba870ceac12eb8a5e9ff/controls.zip)
+[https://gitlab.com/baigouy/models/-/raw/e28042a861ac2c9ddef0ba870ceac12eb8a5e9ff/distances.zip](https://gitlab.com/baigouy/models/-/raw/e28042a861ac2c9ddef0ba870ceac12eb8a5e9ff/distances.zip)
 
 [//]: # ([https://filedn.eu/lP1mui2ztv7VO2qrPEt28Vf/distances.zip]&#40;https://filedn.eu/lP1mui2ztv7VO2qrPEt28Vf/distances.zip&#41;)
-
 
 
 Unzip **each archive separately**.
@@ -177,7 +176,7 @@ If you completed Step 1 yourself, ensure that:
 
 You still need to download the distance images from:
 
-[https://gitlab.com/baigouy/models/-/raw/master/distances.zip](https://gitlab.com/baigouy/models/-/raw/master/distances.zip)
+[https://gitlab.com/baigouy/models/-/raw/e28042a861ac2c9ddef0ba870ceac12eb8a5e9ff/distances.zip](https://gitlab.com/baigouy/models/-/raw/e28042a861ac2c9ddef0ba870ceac12eb8a5e9ff/distances.zip)
 
 [//]: # ([https://filedn.eu/lP1mui2ztv7VO2qrPEt28Vf/distances.zip]&#40;https://filedn.eu/lP1mui2ztv7VO2qrPEt28Vf/distances.zip&#41;)
 
