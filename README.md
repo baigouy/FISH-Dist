@@ -85,6 +85,8 @@ pip install fishdist
 
 **Note:** Correction matrices can be reused across multiple datasets acquired under identical microscope settings, provided they are collected within a short time frame to ensure consistent chromatic aberrations.
 
+**Note2:** For a complete description of input formats, database tables, distance tables, and generated plots, see the **[FISH-Dist Inputs and Outputs](inputs_outputs.md)** guide.
+
 ## Example workflow
 
 FISH-Dist operates in **two sequential phases**. Understanding this order is essential for correct results.
@@ -134,6 +136,8 @@ python -m fishdist --root-path FISH_Dist_analysis
     - Processed images → `distances/DONE/`
     - Distance tables, plots, and reports
 
+    - See the **[FISH-Dist Inputs and Outputs](inputs_outputs.md)** for a full list and description of all generated tables, plots, and additional files.
+
 - Quality Control:
    - Verify consistency between affine and linear corrections
    - If **inconsistent, repeat Step 1** with newly acquired colocalization images.
@@ -147,6 +151,8 @@ Colocalization images → colocs/ → Correction (.npy)
                                      ↓
 Distance images → distances/ → Distance measurements → Check for consistency
 ```
+
+For detailed information about the input formats and description of all outputs, see **[FISH-Dist Inputs and Outputs](inputs_outputs.md)**.
 
 ### Default Channel Convention
 

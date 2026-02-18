@@ -20,4 +20,5 @@ nav:
   - FISH-Dist: index.md
   - Advanced settings (configuration file): CONFIGURATION.md
   - Quick Demo (Tutorial): demo.md
+  - FISH-Dist (inputs/outputs): inputs_outputs.md
   - API.md
