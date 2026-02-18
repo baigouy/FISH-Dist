@@ -17,6 +17,8 @@ FISH-Dist provides:
 - Pairwise inter-spot distance measurements
 - Result visualization and reporting
 
+For a **detailed, step-by-step description of the FISH-Dist workflow**, including the purpose and rationale of each module, **see the [Detailed End-to-End Workflow](detailed_end_to_end_overview.md)**.
+
 ## Install Conda
 
 FISH-Dist requires Conda. If you don’t have it installed:
